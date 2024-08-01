@@ -1,0 +1,22 @@
+version: '3.7'
+
+services:
+  ts-uplati-bot-docker:
+    build:
+      context: .
+      target: production
+    container_name: ts-uplati-bot
+    environment:
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - SEND_DATA=${SEND_DATA:-true}
+      - NODE_ENV=production
+    volumes:
+      - ./data:/home/node/app/data
+      - ./logs:/home/node/app/logs
+    command: npm run bot
+    restart: always
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"

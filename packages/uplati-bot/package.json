@@ -1,0 +1,18 @@
+{
+  "name": "@advayta108/uplati-bot",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Telegram bot application for Uplati",
+  "scripts": {
+    "start": "npx tsx ../../run.ts",
+    "bot": "npx tsx ../../src/telebot.ts",
+    "test": "npx tsx ../../test.ts",
+    "server": "npx tsx ../../server.ts",
+    "api": "npx tsx ../../src/api.ts",
+    "build": "tsc --project ../../tsconfig.json",
+    "clean": "tsc --build --clean ../../tsconfig.json"
+  },
+  "dependencies": {
+    "@advayta108/uplati-sdk": "file:../../lib/uplati-sdk"
+  }
+}
