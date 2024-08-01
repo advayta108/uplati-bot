@@ -1,0 +1,63 @@
+{
+  "name": "uplati-bot-monorepo",
+  "version": "1.0.0",
+  "description": "Бот для автоматической отправки показаний с помощью сервиса Система Город",
+  "main": "run.ts",
+  "private": true,
+  "workspaces": [
+    "lib/uplati-sdk"
+  ],
+  "scripts": {
+    "start": "npx tsx run.ts",
+    "bot": "npx tsx src/telebot.ts",
+    "lint": "eslint . --config eslint.config.mjs",
+    "test": "npx tsx test.ts",
+    "server": "npx tsx server.ts",
+    "api": "npx tsx src/api.ts",
+    "build": "tsc --project tsconfig.json",
+    "build:lib": "npm run build --workspace=@advayta108/uplati-sdk",
+    "clean": "tsc --build --clean",
+    "clean:lib": "npm run clean --workspace=@advayta108/uplati-sdk",
+    "pack:lib": "npm pack --workspace=@advayta108/uplati-sdk",
+    "publish:lib": "npm publish --access public --workspace=@advayta108/uplati-sdk"
+  },
+  "dependencies": {
+    "@advayta108/uplati-sdk": "file:lib/uplati-sdk",
+    "axios": "^1.7.9",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "form-data": "^4.0.5",
+    "jsdom": "^25.0.1",
+    "prompt-sync": "^4.2.0",
+    "sqlite": "^5.1.1",
+    "sqlite3": "^5.1.7",
+    "telegraf": "^4.16.3",
+    "tsx": "^4.20.6"
+  },
+  "devDependencies": {
+    "@eslint/compat": "^1.2.2",
+    "@eslint/js": "^9.39.1",
+    "@types/dedent": "^0.7.2",
+    "@types/eslint__js": "^8.42.3",
+    "@types/express": "^5.0.5",
+    "@types/glob": "^8.1.0",
+    "@types/js-yaml": "^4.0.9",
+    "@types/jsdom": "^21.1.7",
+    "@types/mdast": "^4.0.4",
+    "@types/node": "^22.10.5",
+    "@types/prompt-sync": "^4.2.3",
+    "@types/unist": "^3.0.3",
+    "@typescript-eslint/eslint-plugin": "^8.48.0",
+    "@typescript-eslint/parser": "^8.48.0",
+    "eslint": "^9.39.1",
+    "eslint-plugin-codegen": "^0.34.1",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.48.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/advayta108/uplati-bot.git"
+  },
+  "author": "advayta108",
+  "license": "MIT"
+}
