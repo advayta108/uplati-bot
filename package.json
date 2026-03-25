@@ -36,7 +36,7 @@
   },
   "devDependencies": {
     "@eslint/compat": "^1.2.2",
-    "@eslint/js": "^9.39.1",
+    "@eslint/js": "^10.0.1",
     "@types/dedent": "^0.7.2",
     "@types/eslint__js": "^8.42.3",
     "@types/express": "^5.0.5",
