@@ -24,6 +24,7 @@
   <a href="https://github.com/advayta108/uplati-bot/actions/workflows/build.yml"><img src="https://github.com/advayta108/uplati-bot/actions/workflows/build.yml/badge.svg" alt="Build" /></a>
   <a href="https://github.com/advayta108/uplati-bot/actions/workflows/lint.yml"><img src="https://github.com/advayta108/uplati-bot/actions/workflows/lint.yml/badge.svg" alt="Lint" /></a>
   <a href="https://github.com/advayta108/uplati-bot/actions/workflows/publish-sdk.yml"><img src="https://github.com/advayta108/uplati-bot/actions/workflows/publish-sdk.yml/badge.svg" alt="Publish SDK" /></a>
+  <a href="https://app.fossa.com/projects/git%2Bgithub.com%2Fadvayta108%2Fuplati-bot?ref=badge_small"><img src="https://app.fossa.com/api/projects/git%2Bgithub.com%2Fadvayta108%2Fuplati-bot.svg?type=small" alt="FOSSA Status" /></a>
 </p>
 
 `UPLATI-BOT-SDK-MONOREPO` is a production-oriented TypeScript monorepo for the Uplati ecosystem ([uplati.ru](https://uplati.ru)).

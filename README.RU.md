@@ -11,6 +11,7 @@
 [![Build](https://github.com/advayta108/uplati-bot/actions/workflows/build.yml/badge.svg)](https://github.com/advayta108/uplati-bot/actions/workflows/build.yml)
 [![Lint](https://github.com/advayta108/uplati-bot/actions/workflows/lint.yml/badge.svg)](https://github.com/advayta108/uplati-bot/actions/workflows/lint.yml)
 [![Publish SDK](https://github.com/advayta108/uplati-bot/actions/workflows/publish-sdk.yml/badge.svg)](https://github.com/advayta108/uplati-bot/actions/workflows/publish-sdk.yml)
+[![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2Fadvayta108%2Fuplati-bot.svg?type=small)](https://app.fossa.com/projects/git%2Bgithub.com%2Fadvayta108%2Fuplati-bot?ref=badge_small)
 
 `UPLATI-BOT-SDK-MONOREPO` — это production-ориентированный TypeScript-монорепозиторий для работы с сервисом [Система Город](https://uplati.ru).
 Он объединяет SDK-библиотеку для интеграции с API и полноценный пример Telegram-бота с реальными сценариями: авторизация, получение счетчиков, отправка показаний, квитанции и транзакции.

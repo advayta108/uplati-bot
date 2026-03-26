@@ -17,9 +17,10 @@
 </p>
 
 <p align="center">
-  <a href="https://www.npmjs.com/package/@advayta108/uplati-sdk"><img src="https://img.shields.io/npm/v/@advayta108/uplati-sdk?style=flat-square&label=npm" alt="npm version" /></a>
+  <a href="https://www.npmjs.com/package/@advayta108/uplati-sdk/v/1.0.3"><img src="https://img.shields.io/static/v1?label=npm&message=1.0.3&color=CB3837&logo=npm&logoColor=white&style=flat-square" alt="npm 1.0.3" /></a>
   <a href="https://uplati.ru"><img src="https://img.shields.io/badge/API_Version-3.25.10-orange.svg" alt="API Version" /></a>
   <a href="https://github.com/advayta108/uplati-bot/actions/workflows/publish-sdk.yml"><img src="https://github.com/advayta108/uplati-bot/actions/workflows/publish-sdk.yml/badge.svg" alt="Publish SDK" /></a>
+  <a href="https://app.fossa.com/projects/git%2Bgithub.com%2Fadvayta108%2Fuplati-bot?ref=badge_small"><img src="https://app.fossa.com/api/projects/git%2Bgithub.com%2Fadvayta108%2Fuplati-bot.svg?type=small" alt="FOSSA Status" /></a>
 </p>
 
 **TypeScript SDK** для работы с API сервиса [«Система город»](https://uplati.ru) (Uplati). Авторизация, счётчики, показания, квитанции, транзакции и автоплатежи.
