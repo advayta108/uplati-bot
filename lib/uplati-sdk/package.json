@@ -1,7 +1,7 @@
 {
   "name": "@advayta108/uplati-sdk",
-  "version": "1.0.0",
-  "description": "SDK для работы с API сервиса Система Город (Uplati)",
+  "version": "1.0.1",
+  "description": "TypeScript SDK for the Uplati «Система город» (city services) API",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "exports": {
@@ -16,6 +16,7 @@
   "files": [
     "dist",
     "README.md",
+    "README.RU.md",
     "LICENSE"
   ],
   "scripts": {
@@ -35,12 +36,13 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/advayta108/uptati-sdk.git"
+    "url": "https://github.com/advayta108/uplati-bot.git",
+    "directory": "lib/uplati-sdk"
   },
   "bugs": {
-    "url": "https://github.com/advayta108/uptati-sdk/issues"
+    "url": "https://github.com/advayta108/uplati-bot/issues"
   },
-  "homepage": "https://github.com/advayta108/uptati-sdk#readme",
+  "homepage": "https://github.com/advayta108/uplati-bot/tree/main/lib/uplati-sdk#readme",
   "engines": {
     "node": ">=18.0.0"
   },
