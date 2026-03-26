@@ -22,15 +22,15 @@
   <a href="https://github.com/advayta108/uplati-bot/actions/workflows/publish-sdk.yml"><img src="https://github.com/advayta108/uplati-bot/actions/workflows/publish-sdk.yml/badge.svg" alt="Publish SDK" /></a>
 </p>
 
-**TypeScript SDK** for the [«Система город»](https://uplati.ru) (Uplati) service API. Use it to authenticate, read meters, submit readings, fetch receipts, transactions, and manage autopayments.
+**TypeScript SDK** для работы с API сервиса [«Система город»](https://uplati.ru) (Uplati). Авторизация, счётчики, показания, квитанции, транзакции и автоплатежи.
 
-## Install
+## Установка
 
 ```bash
 npm install @advayta108/uplati-sdk
 ```
 
-## Quick start
+## Быстрый старт
 
 ```typescript
 import { UplatiClient } from '@advayta108/uplati-sdk';
@@ -46,16 +46,16 @@ const meters = await client.getMeters();
 await client.sendMeterValue(meters[0].id, 123.45);
 ```
 
-## Features
+## Возможности
 
-- Session authentication and token handling
-- List meters (sensors)
-- Submit meter readings
-- Fetch receipts
-- Transaction history
-- Get / set / delete autopayments
+- Авторизация и управление токеном сессии
+- Получение списка счётчиков
+- Отправка показаний
+- Получение квитанций
+- История транзакций
+- Получение / настройка / удаление автоплатежей
 
-## `UplatiClient` API
+## API клиента `UplatiClient`
 
 - `authenticate(email: string, password: string): Promise<string>`
 - `setToken(token: string): void`
@@ -68,7 +68,7 @@ await client.sendMeterValue(meters[0].id, 123.45);
 - `setAutopayment(settings: AutopaymentSettings): Promise<boolean>`
 - `deleteAutopayment(autopaymentId: number): Promise<boolean>`
 
-## Exported types
+## Экспортируемые типы
 
 ```typescript
 import {
@@ -80,39 +80,39 @@ import {
 } from '@advayta108/uplati-sdk';
 ```
 
-## Client options
+## Настройки клиента
 
 ```typescript
 new UplatiClient({
-  sendDataEnabled: true, // false -> dry run without sending
+  sendDataEnabled: true, // false -> тестовый режим без отправки
   baseUrl: 'https://gw3-online.uplati.ru/api',
   logger: console.log,
 });
 ```
 
-## Development in the monorepo
+## Разработка в монорепозитории
 
-If you work inside **UPLATI-BOT-SDK-MONOREPO**:
+Если вы работаете внутри **UPLATI-BOT-SDK-MONOREPO**:
 
 ```bash
 npm install
 npm run build:lib
 ```
 
-Publish from the monorepo:
+Публикация из монорепозитория:
 
 ```bash
 npm run publish:lib
 ```
 
-## Documentation
+## Документация
 
-- Monorepo (EN): [README.md](https://github.com/advayta108/uplati-bot/blob/main/README.md)
-- Monorepo (RU): [README.RU.md](https://github.com/advayta108/uplati-bot/blob/main/README.RU.md)
-- Deployment: [docs/DEPLOY.md](https://github.com/advayta108/uplati-bot/blob/main/docs/DEPLOY.md)
-- Publishing: [docs/PUBLISHING_GUIDE.md](https://github.com/advayta108/uplati-bot/blob/main/docs/PUBLISHING_GUIDE.md)
-- Monorepo setup: [docs/MONOREPO_SETUP.md](https://github.com/advayta108/uplati-bot/blob/main/docs/MONOREPO_SETUP.md)
+- Монорепозиторий (EN): [README.md](https://github.com/advayta108/uplati-bot/blob/main/README.md)
+- Монорепозиторий (RU): [README.RU.md](https://github.com/advayta108/uplati-bot/blob/main/README.RU.md)
+- Деплой: [docs/DEPLOY.md](https://github.com/advayta108/uplati-bot/blob/main/docs/DEPLOY.md)
+- Публикация: [docs/PUBLISHING_GUIDE.md](https://github.com/advayta108/uplati-bot/blob/main/docs/PUBLISHING_GUIDE.md)
+- Монорепо: [docs/MONOREPO_SETUP.md](https://github.com/advayta108/uplati-bot/blob/main/docs/MONOREPO_SETUP.md)
 
-## License
+## Лицензия
 
-MIT. See [LICENSE](https://github.com/advayta108/uplati-bot/blob/main/lib/uplati-sdk/LICENSE).
+MIT. См. [LICENSE](https://github.com/advayta108/uplati-bot/blob/main/lib/uplati-sdk/LICENSE).

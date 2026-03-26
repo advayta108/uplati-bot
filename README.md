@@ -103,7 +103,7 @@ Use in your app:
 import { UplatiClient } from '@advayta108/uplati-sdk';
 ```
 
-SDK documentation: `lib/uplati-sdk/README.md`
+SDK documentation: [`lib/uplati-sdk/README.md`](lib/uplati-sdk/README.md) (EN), [`lib/uplati-sdk/README.RU.md`](lib/uplati-sdk/README.RU.md) (RU)
 
 ## 📤 Publish SDK
 
