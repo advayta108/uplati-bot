@@ -1,6 +1,6 @@
 import { Telegraf} from 'telegraf';
 import dotenv from 'dotenv';
-import { addUser, initializeDb, upsertMeter, getAllUsers, updateUserToken } from './database';  // Импортируем базу данных
+import { addUser, initializeDb, upsertMeter, getAllUsers, updateUserToken, type MeterRow, type UserRow } from './database';  // Импортируем базу данных
 import { Receipt, Transaction, UplatiClient } from '@advayta108/uplati-sdk';
 import { logMessage } from './logging';
 
@@ -73,7 +73,7 @@ const updateAllUsersData = async () => {
           await updateUserToken(user.chatId, token);
           logMessage(`Токен успешно обновлён для пользователя ${user.chatId}`);
         } else {
-          uplatiClient.setToken(token);
+          uplatiClient.setToken(token!);
         }
 
         // Получаем актуальные данные по счётчикам
@@ -150,6 +150,30 @@ interface UserData {
 
 const userData: Record<number, UserData> = {};
 
+// Приветственная команда
+bot.command('start', (ctx) => {
+  const message = [
+    'Привет! Я бот сервиса «Система город»',
+    '',
+    'Что я умею:',
+    '🔐 Авторизовать и сохранить данные пользователя',
+    '📥 Обновлять данные по счётчикам из API',
+    '📊 Показывать текущий статус счётчиков',
+    '🧾 Показывать список квитанций',
+    '💳 Показывать последние транзакции',
+    '',
+    'Доступные команды:',
+    '/start',
+    '/adduser',
+    '/status',
+    '/update',
+    '/receipts',
+    '/transactions',
+  ].join('\n');
+
+  ctx.reply(message);
+});
+
 // Команда для получения текущего статуса счётчиков
 bot.command('status', async (ctx) => {
   const chatId = ctx.message?.chat.id;
@@ -160,20 +184,20 @@ bot.command('status', async (ctx) => {
   try {
     const db = await initializeDb();
     
-    const user = await db.get('SELECT * FROM users WHERE chatId = ?', [chatId]);
+    const user = await db.get<UserRow>('SELECT * FROM users WHERE chatId = ?', [chatId]);
     if (!user) {
       ctx.reply('Вы не зарегистрированы. Пожалуйста, используйте команду /adduser для регистрации.');
       return;
     }
 
-    const meters = await db.all('SELECT * FROM meters WHERE userId = ?', [user.chatId]);
+    const meters = await db.all<MeterRow>('SELECT * FROM meters WHERE userId = ?', [user.chatId]);
     if (meters.length === 0) {
       ctx.reply('У вас нет зарегистрированных счётчиков.');
       return;
     }
 
     let message = 'Ваши счётчики:\n';
-    meters.forEach((meter: { meterName: string, lastValue: string, lastUpdated: string }, index: number) => {
+    meters.forEach((meter: MeterRow, index: number) => {
       message += `${index + 1}. ${meter.meterName}: ${meter.lastValue} (последнее обновление: ${meter.lastUpdated})\n`;
     });
 
@@ -194,7 +218,7 @@ bot.command('update', async (ctx) => {
 
   try {
     const db = await initializeDb();
-    const user = await db.get('SELECT * FROM users WHERE chatId = ?', [chatId]);
+    const user = await db.get<UserRow>('SELECT * FROM users WHERE chatId = ?', [chatId]);
     
     if (!user) {
       ctx.reply('Вы не зарегистрированы. Пожалуйста, используйте команду /adduser для регистрации.');
@@ -244,7 +268,7 @@ bot.command('receipts', async (ctx) => {
 
   try {
     const db = await initializeDb();
-    const user = await db.get('SELECT * FROM users WHERE chatId = ?', [chatId]);
+    const user = await db.get<UserRow>('SELECT * FROM users WHERE chatId = ?', [chatId]);
     
     if (!user) {
       ctx.reply('Вы не зарегистрированы. Пожалуйста, используйте команду /adduser для регистрации.');
@@ -296,7 +320,7 @@ bot.command('transactions', async (ctx) => {
 
   try {
     const db = await initializeDb();
-    const user = await db.get('SELECT * FROM users WHERE chatId = ?', [chatId]);
+    const user = await db.get<UserRow>('SELECT * FROM users WHERE chatId = ?', [chatId]);
     
     if (!user) {
       ctx.reply('Вы не зарегистрированы. Пожалуйста, используйте команду /adduser для регистрации.');

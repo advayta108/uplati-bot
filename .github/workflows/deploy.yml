@@ -50,6 +50,15 @@ jobs:
           fi &&
           cd /home/github/ts-uplati-bot-main || mkdir -p /home/github/ts-uplati-bot-main &&
           cd /home/github/ts-uplati-bot-main &&
+          mkdir -p backups &&
+          if [ -f data/users.db ]; then
+            TS=$(date +%Y%m%d-%H%M%S) &&
+            cp data/users.db "backups/users-${TS}.db" &&
+            echo "✅ DB backup created: backups/users-${TS}.db";
+          else
+            echo "ℹ️ No users.db found, skipping backup";
+          fi &&
+          find backups -type f -name "users-*.db" -mtime +14 -delete || true &&
           $COMPOSE_CMD -f docker-compose.prod.yml down || true &&
           pkill -f "tsx.*telebot" || true &&
           pkill -f "npm.*bot" || true &&
@@ -63,6 +72,14 @@ jobs:
           mkdir -p /home/github/ts-uplati-bot-main &&
           mkdir -p /home/github/ts-uplati-bot-main/data &&
           mkdir -p /home/github/ts-uplati-bot-main/logs'  # Создаем необходимые директории
+
+    - name: Clean docker build cache on server
+      run: |
+        ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -p 22 root@$SERVER_IP '
+          echo "Cleaning docker builder cache..." &&
+          docker builder prune -af || true &&
+          echo "Removing dangling images..." &&
+          docker image prune -af || true'
 
     - name: Copy repository to server
       run: |
