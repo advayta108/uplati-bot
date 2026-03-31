@@ -38,8 +38,6 @@ TypeScript monorepo with:
 - `packages/uplati-bot` - workspace package for bot app
 - `src/` + `run.ts` - bot source and automation worker
 
-Russian version: `README.RU.md`
-
 ## 🧱 Project Structure
 
 ```text

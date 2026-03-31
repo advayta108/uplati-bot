@@ -30,8 +30,7 @@
     "form-data": "^4.0.5",
     "jsdom": "^29.0.0",
     "prompt-sync": "^4.2.0",
-    "sqlite": "^5.1.1",
-    "sqlite3": "^6.0.1",
+    "better-sqlite3": "^12.8.0",
     "telegraf": "^4.16.3",
     "tsx": "^4.20.6"
   },
@@ -39,6 +38,7 @@
     "@eslint/compat": "^2.0.3",
     "@eslint/js": "^10.0.1",
     "@types/dedent": "^0.7.2",
+    "@types/better-sqlite3": "^7.6.12",
     "@types/express": "^5.0.6",
     "@types/js-yaml": "^4.0.9",
     "@types/jsdom": "^28.0.1",

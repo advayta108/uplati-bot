@@ -1,3 +1,4 @@
+
 <h1 align="center">UPLATI-BOT-SDK-MONOREPO</h1>
 
 <p align="center">
@@ -36,8 +37,6 @@
 
 - `lib/uplati-sdk` - npm SDK для API Uplati
 - `src/` + `run.ts` - Telegram-бот и фоновый отправщик показаний
-
-English version: `README.md`
 
 ## 🧱 Структура
 

@@ -1,4 +1,4 @@
-import { initializeDb } from './src/database';  // Работа с БД
+import { initializeDb, type MeterRow, type UserRow } from './src/database';  // Работа с БД
 import { UplatiClient } from '@advayta108/uplati-sdk';
 import { logMessage } from './src/logging';  // Логирование
 import dotenv from 'dotenv';
@@ -22,10 +22,10 @@ const checkAndSendReadings = async () => {
   while (true) {
     try {
       logMessage('Проверка пользователей для отправки показаний...');
-      const users = await db.all('SELECT * FROM users');  // Получаем всех пользователей
+      const users = await db.all<UserRow>('SELECT * FROM users');  // Получаем всех пользователей
       
       for (const user of users) {
-        const meters = await db.all('SELECT * FROM meters WHERE userId = ?', [user.chatId]);
+        const meters = await db.all<MeterRow>('SELECT * FROM meters WHERE userId = ?', [user.chatId]);
 
         for (const meter of meters) {
           const now = new Date();
