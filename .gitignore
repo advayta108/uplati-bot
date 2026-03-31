@@ -3,6 +3,7 @@
 /test/
 /data/
 /.vscode
+/.cursor
 # Logs
 logs
 *.log

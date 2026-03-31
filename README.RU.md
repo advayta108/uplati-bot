@@ -1,17 +1,31 @@
-# UPLATI-BOT-SDK-MONOREPO
+<h1 align="center">UPLATI-BOT-SDK-MONOREPO</h1>
 
 <p align="center">
-  <img src="https://lk.uplati.ru/images/logo.png" alt="Логотип Система Город" width="220" />
+  <img src="https://lk.uplati.ru/images/logo.png" alt="Система Город Logo" width="220" />
 </p>
 
-[![Docs EN](https://img.shields.io/badge/Docs-English-blue)](README.md)
-[![Docs RU](https://img.shields.io/badge/Docs-Russian-green)](README.RU.md)
-[![API Version](https://img.shields.io/badge/API_Version-3.25.10-orange.svg)](https://uplati.ru)
-[![Deploybot](https://github.com/advayta108/uplati-bot/actions/workflows/deploy.yml/badge.svg)](https://github.com/advayta108/uplati-bot/actions/workflows/deploy.yml)
-[![Build](https://github.com/advayta108/uplati-bot/actions/workflows/build.yml/badge.svg)](https://github.com/advayta108/uplati-bot/actions/workflows/build.yml)
-[![Lint](https://github.com/advayta108/uplati-bot/actions/workflows/lint.yml/badge.svg)](https://github.com/advayta108/uplati-bot/actions/workflows/lint.yml)
-[![Publish SDK](https://github.com/advayta108/uplati-bot/actions/workflows/publish-sdk.yml/badge.svg)](https://github.com/advayta108/uplati-bot/actions/workflows/publish-sdk.yml)
-[![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2Fadvayta108%2Fuplati-bot.svg?type=small)](https://app.fossa.com/projects/git%2Bgithub.com%2Fadvayta108%2Fuplati-bot?ref=badge_small)
+<p align="center">
+  <a href="https://www.typescriptlang.org/"><img src="https://img.shields.io/badge/TypeScript-3178C6?style=for-the-badge&logo=typescript&logoColor=white" alt="TypeScript" /></a>
+  <a href="https://nodejs.org/"><img src="https://img.shields.io/badge/Node.js-339933?style=for-the-badge&logo=nodedotjs&logoColor=white" alt="Node.js" /></a>
+  <a href="https://www.npmjs.com/package/telegraf"><img src="https://img.shields.io/badge/Telegraf-26A5E4?style=for-the-badge&logo=telegram&logoColor=white" alt="Telegraf" /></a>
+  <a href="https://axios-http.com/"><img src="https://img.shields.io/badge/Axios-5A29E4?style=for-the-badge&logo=axios&logoColor=white" alt="Axios" /></a>
+  <a href="https://www.sqlite.org/"><img src="https://img.shields.io/badge/SQLite-003B57?style=for-the-badge&logo=sqlite&logoColor=white" alt="SQLite" /></a>
+  <a href="https://www.docker.com/"><img src="https://img.shields.io/badge/Docker-2496ED?style=for-the-badge&logo=docker&logoColor=white" alt="Docker" /></a>
+</p>
+
+<p align="center">
+  <a href="./README.md"><img src="https://img.shields.io/badge/English-0052CC?style=for-the-badge&logo=github&logoColor=white" alt="English" /></a>
+  <a href="./README.RU.md"><img src="https://img.shields.io/badge/Русский-0052CC?style=for-the-badge&logo=github&logoColor=white" alt="Русский" /></a>
+</p>
+
+<p align="center">
+  <a href="https://uplati.ru"><img src="https://img.shields.io/badge/API_Version-3.25.10-orange.svg" alt="API Version" /></a>
+  <a href="https://github.com/advayta108/uplati-bot/actions/workflows/deploy.yml"><img src="https://github.com/advayta108/uplati-bot/actions/workflows/deploy.yml/badge.svg" alt="Deploybot" /></a>
+  <a href="https://github.com/advayta108/uplati-bot/actions/workflows/build.yml"><img src="https://github.com/advayta108/uplati-bot/actions/workflows/build.yml/badge.svg" alt="Build" /></a>
+  <a href="https://github.com/advayta108/uplati-bot/actions/workflows/lint.yml"><img src="https://github.com/advayta108/uplati-bot/actions/workflows/lint.yml/badge.svg" alt="Lint" /></a>
+  <a href="https://github.com/advayta108/uplati-bot/actions/workflows/publish-sdk.yml"><img src="https://github.com/advayta108/uplati-bot/actions/workflows/publish-sdk.yml/badge.svg" alt="Publish SDK" /></a>
+  <a href="https://app.fossa.com/projects/git%2Bgithub.com%2Fadvayta108%2Fuplati-bot?ref=badge_small"><img src="https://app.fossa.com/api/projects/git%2Bgithub.com%2Fadvayta108%2Fuplati-bot.svg?type=small" alt="FOSSA Status" /></a>
+</p>
 
 `UPLATI-BOT-SDK-MONOREPO` — это production-ориентированный TypeScript-монорепозиторий для работы с сервисом [Система Город](https://uplati.ru).
 Он объединяет SDK-библиотеку для интеграции с API и полноценный пример Telegram-бота с реальными сценариями: авторизация, получение счетчиков, отправка показаний, квитанции и транзакции.

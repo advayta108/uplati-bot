@@ -111,9 +111,7 @@ jobs:
             COMPOSE_CMD="docker compose"
           fi &&
           cd /home/github/ts-uplati-bot-main &&
-          echo "=== Запущенные контейнеры ===" &&
-          docker ps &&
-          echo "=== Статус контейнера бота ===" &&
+          echo "=== Bot container status ===" &&
           $COMPOSE_CMD -f docker-compose.prod.yml ps &&
-          echo "=== Последние логи (проверка запуска) ===" &&
+          echo "=== Recent startup logs ===" &&
           $COMPOSE_CMD -f docker-compose.prod.yml logs --tail=20 ts-uplati-bot-docker'  # Проверяем статус

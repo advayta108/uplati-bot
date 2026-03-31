@@ -1,13 +1,9 @@
 name: Publish SDK to npm
 
 on:
-  release:
-    types: [published]
   push:
     branches:
-      - main
-    tags:
-      - "sdk-v*"
+      - release
   workflow_dispatch:
 
 jobs:
@@ -23,7 +19,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v5
         with:
-          node-version: "22"
+          node-version: "25"
           registry-url: "https://registry.npmjs.org"
 
       - name: Install dependencies
@@ -32,12 +28,26 @@ jobs:
       - name: Build SDK
         run: npm run build:lib
 
+      - name: Check if SDK version already published
+        id: version_check
+        shell: bash
+        run: |
+          VERSION=$(node -p "require('./lib/uplati-sdk/package.json').version")
+          echo "sdk_version=$VERSION" >> "$GITHUB_OUTPUT"
+          if npm view "@advayta108/uplati-sdk@$VERSION" version >/dev/null 2>&1; then
+            echo "should_publish=false" >> "$GITHUB_OUTPUT"
+            echo "Version $VERSION is already published. Skipping publish."
+          else
+            echo "should_publish=true" >> "$GITHUB_OUTPUT"
+            echo "Version $VERSION is not published yet. Will publish."
+          fi
+
       - name: Pack SDK (status on push)
-        if: github.event_name == 'push' && startsWith(github.ref, 'refs/heads/')
+        if: github.event_name == 'push' && github.ref == 'refs/heads/release'
         run: npm run pack:lib
 
       - name: Publish SDK
-        if: github.event_name == 'release' || github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/sdk-v')
+        if: ((github.event_name == 'push' && github.ref == 'refs/heads/release') || github.event_name == 'workflow_dispatch') && steps.version_check.outputs.should_publish == 'true'
         run: npm run publish:lib
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
