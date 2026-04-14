@@ -19,7 +19,6 @@ COPY packages/uplati-bot/package.json ./packages/uplati-bot/
 # Устанавливаем зависимости (включая workspace-пакеты)
 WORKDIR /home/node/app
 RUN npm ci
-RUN npm rebuild better-sqlite3 --build-from-source
 
 # Копируем весь код
 COPY . .

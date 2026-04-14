@@ -24,7 +24,7 @@ jobs:
         echo "NODE_ENV=production" >> $GITHUB_ENV  # Указываем режим production
 
     - name: Set up SSH
-      uses: webfactory/ssh-agent@v0.9.0
+      uses: webfactory/ssh-agent@v0.10.0
       with:
         ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
 
@@ -40,13 +40,16 @@ jobs:
           exit 1
         }
 
-    - name: Stop and remove docker-compose services on server
+    - name: Stop and remove bot container on server
       run: |
         ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -p 22 root@$SERVER_IP '
-          if command -v docker-compose >/dev/null 2>&1; then
+          if docker compose version >/dev/null 2>&1; then
+            COMPOSE_CMD="docker compose"
+          elif command -v docker-compose >/dev/null 2>&1; then
             COMPOSE_CMD="docker-compose"
           else
-            COMPOSE_CMD="docker compose"
+            echo "❌ Neither docker compose plugin nor docker-compose is installed" &&
+            exit 1
           fi &&
           cd /home/github/ts-uplati-bot-main || mkdir -p /home/github/ts-uplati-bot-main &&
           cd /home/github/ts-uplati-bot-main &&
@@ -59,7 +62,13 @@ jobs:
             echo "ℹ️ No users.db found, skipping backup";
           fi &&
           find backups -type f -name "users-*.db" -mtime +14 -delete || true &&
-          $COMPOSE_CMD -f docker-compose.prod.yml down || true &&
+          if [ -f docker-compose.prod.yml ]; then
+            $COMPOSE_CMD -f docker-compose.prod.yml stop ts-uplati-bot-docker || true &&
+            $COMPOSE_CMD -f docker-compose.prod.yml rm -f ts-uplati-bot-docker || true;
+          else
+            echo "ℹ️ docker-compose.prod.yml not found, skipping compose stop";
+          fi &&
+          docker rm -f ts-uplati-bot || true &&
           pkill -f "tsx.*telebot" || true &&
           pkill -f "npm.*bot" || true &&
           sleep 2' || {
@@ -98,37 +107,43 @@ jobs:
           cd /home/github/ts-uplati-bot-main &&
           chmod +x docker-compose.prod.yml'
 
-    - name: Build and run containers with docker-compose
+    - name: Build and run bot container with docker-compose
       run: |
         ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -p 22 root@$SERVER_IP '
-          if command -v docker-compose >/dev/null 2>&1; then
+          if docker compose version >/dev/null 2>&1; then
+            COMPOSE_CMD="docker compose"
+          elif command -v docker-compose >/dev/null 2>&1; then
             COMPOSE_CMD="docker-compose"
           else
-            COMPOSE_CMD="docker compose"
+            echo "❌ Neither docker compose plugin nor docker-compose is installed" &&
+            exit 1
           fi &&
           cd /home/github/ts-uplati-bot-main &&
           echo "TELEGRAM_BOT_TOKEN=${{ secrets.TELEGRAM_BOT_TOKEN }}" > .env &&
           echo "SEND_DATA=true" >> .env &&
           echo "NODE_ENV=production" >> .env &&
           echo "✅ .env file created" &&
-          $COMPOSE_CMD -f docker-compose.prod.yml up -d --build --remove-orphans &&
+          COMPOSE_INTERACTIVE_NO_CLI=1 $COMPOSE_CMD -f docker-compose.prod.yml up -d --build --force-recreate --no-deps ts-uplati-bot-docker &&
           echo "✅ Containers started" &&
           sleep 5 &&
-          $COMPOSE_CMD -f docker-compose.prod.yml logs --tail=50' || {
+          $COMPOSE_CMD -f docker-compose.prod.yml logs --tail=50 ts-uplati-bot-docker' || {
           echo "❌ Failed to build or start containers"
           exit 1
         }
 
-    - name: Check running containers
+    - name: Check running container
       run: |
         ssh -o StrictHostKeyChecking=no -p 22 root@$SERVER_IP '
-          if command -v docker-compose >/dev/null 2>&1; then
+          if docker compose version >/dev/null 2>&1; then
+            COMPOSE_CMD="docker compose"
+          elif command -v docker-compose >/dev/null 2>&1; then
             COMPOSE_CMD="docker-compose"
           else
-            COMPOSE_CMD="docker compose"
+            echo "❌ Neither docker compose plugin nor docker-compose is installed" &&
+            exit 1
           fi &&
           cd /home/github/ts-uplati-bot-main &&
           echo "=== Bot container status ===" &&
-          $COMPOSE_CMD -f docker-compose.prod.yml ps &&
+          $COMPOSE_CMD -f docker-compose.prod.yml ps ts-uplati-bot-docker &&
           echo "=== Recent startup logs ===" &&
           $COMPOSE_CMD -f docker-compose.prod.yml logs --tail=20 ts-uplati-bot-docker'  # Проверяем статус
