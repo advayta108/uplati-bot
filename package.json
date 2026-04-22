@@ -24,7 +24,7 @@
   },
   "dependencies": {
     "@advayta108/uplati-sdk": "file:lib/uplati-sdk",
-    "axios": "^1.15.0",
+    "axios": "^1.15.2",
     "better-sqlite3": "^12.9.0",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
