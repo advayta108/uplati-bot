@@ -56,6 +56,66 @@ function asString(v: unknown, fallback = ''): string {
   return String(v);
 }
 
+/** Период для `GET /history`: `YYYY-MM` (как в ЛК). */
+function formatHistoryPeriodYm(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  return `${y}-${m}`;
+}
+
+function getHistoryPeriodParams(monthsInclusive: number): { period_start: string; period_end: string } {
+  const end = new Date();
+  const start = new Date(end);
+  start.setMonth(start.getMonth() - (monthsInclusive - 1));
+  return { period_start: formatHistoryPeriodYm(start), period_end: formatHistoryPeriodYm(end) };
+}
+
+function mapHistoryRowToTransaction(raw: unknown): Transaction | null {
+  const r = asRecord(raw);
+  if (!r) return null;
+  const id = asNumber(r.unc) ?? asNumber(r.id);
+  if (id === null) return null;
+  const paymentAmount = asNumber(r.payment_amount) ?? asNumber(r.amount) ?? 0;
+  const amountNet = asNumber(r.amount);
+  const commission = asNumber(r.commission) ?? 0;
+  const isAutopay = Boolean(r.is_autopayment);
+  const isRecurrent = Boolean(r.is_recurrent);
+  let status = 'оплачено';
+  if (isAutopay) status = 'автоплатёж';
+  else if (isRecurrent) status = 'рекуррент';
+  const service = asString(r.service_name, 'оплата');
+  const ppp = asString(r.ppp_name, '');
+  const unc = asString(r.unc, String(id));
+  const parts: string[] = [];
+  if (ppp) parts.push(ppp);
+  if (commission > 0 && amountNet !== null) {
+    parts.push(`комиссия ${commission} ₽ (к получателю ${amountNet} ₽)`);
+  } else if (commission > 0) {
+    parts.push(`комиссия ${commission} ₽`);
+  }
+  parts.push(`УНК ${unc}`);
+  const addr = r.address != null ? asString(r.address, '').trim() : '';
+  if (addr) parts.push(addr);
+
+  return {
+    id,
+    date: asString(r.payment_date ?? r.date, ''),
+    amount: paymentAmount,
+    status,
+    type: service,
+    description: parts.join(' · '),
+    receipt_id: asNumber(r.receipt_id) ?? undefined,
+  };
+}
+
+function sortTransactionsByDateDesc(items: Transaction[]): Transaction[] {
+  const t = (d: string): number => {
+    const x = Date.parse(d);
+    return Number.isFinite(x) ? x : 0;
+  };
+  return [...items].sort((a, b) => t(b.date) - t(a.date));
+}
+
 function counterItemToSensor(item: unknown): Sensor {
   const r = asRecord(item);
   if (!r) throw new Error('Counter item is not an object');
@@ -432,16 +492,20 @@ export const getTransactions = async (
     push(root.items);
     push(root.operations);
     push(root.payments);
+    push(root.history);
     push(root.list);
     if (nested) {
       push(nested.transactions);
       push(nested.items);
       push(nested.operations);
       push(nested.payments);
+      push(nested.history);
       push(nested.list);
     }
     for (const arr of arrays) {
-      const mapped = arr.map(mapTransaction).filter((x): x is Transaction => Boolean(x));
+      const mapped = arr
+        .map((row) => mapTransaction(row) ?? mapHistoryRowToTransaction(row))
+        .filter((x): x is Transaction => Boolean(x));
       if (mapped.length > 0) return mapped;
     }
     return [];
@@ -459,10 +523,34 @@ export const getTransactions = async (
   const paths = ['/transactions', '/user/transactions', '/payment_operations', '/payments'];
 
   try {
+    const fetchPaymentHistory = async (): Promise<Transaction[]> => {
+      const { period_start, period_end } = getHistoryPeriodParams(3);
+      const response = await axios.get(`${baseUrl}/history`, {
+        headers: getHeaders(token),
+        params: { period_start, period_end },
+      });
+      const root = asRecord(response.data);
+      const hist = root && Array.isArray(root.history) ? root.history : [];
+      return hist.map(mapHistoryRowToTransaction).filter((x): x is Transaction => Boolean(x));
+    };
+
+    try {
+      const fromHistory = sortTransactionsByDateDesc(await fetchPaymentHistory());
+      const cap = limit ?? fromHistory.length;
+      if (fromHistory.length > 0) return fromHistory.slice(0, cap);
+    } catch (e: unknown) {
+      if (e instanceof AxiosError && e.response?.status !== 404) {
+        logger('Transactions /history: ' + (e.response?.data || e.message));
+      }
+    }
+
     for (const path of paths) {
       try {
         const list = await fetchList(path);
-        if (list.length > 0) return list;
+        if (list.length > 0) {
+          const sorted = sortTransactionsByDateDesc(list);
+          return limit ? sorted.slice(0, limit) : sorted;
+        }
       } catch (e: unknown) {
         if (e instanceof AxiosError && e.response?.status === 404) continue;
         if (e instanceof AxiosError) {
