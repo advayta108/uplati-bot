@@ -53,6 +53,7 @@ jobs:
           fi &&
           cd /home/github/ts-uplati-bot-main || mkdir -p /home/github/ts-uplati-bot-main &&
           cd /home/github/ts-uplati-bot-main &&
+          docker rm -f ts-uplati-bot 2>/dev/null || true &&
           mkdir -p backups &&
           if [ -f data/users.db ]; then
             TS=$(date +%Y%m%d-%H%M%S) &&
@@ -64,11 +65,12 @@ jobs:
           find backups -type f -name "users-*.db" -mtime +14 -delete || true &&
           if [ -f docker-compose.prod.yml ]; then
             $COMPOSE_CMD -f docker-compose.prod.yml stop ts-uplati-bot-docker || true &&
-            $COMPOSE_CMD -f docker-compose.prod.yml rm -f ts-uplati-bot-docker || true;
+            $COMPOSE_CMD -f docker-compose.prod.yml rm -f ts-uplati-bot-docker || true &&
+            COMPOSE_INTERACTIVE_NO_CLI=1 $COMPOSE_CMD -f docker-compose.prod.yml down --remove-orphans || true;
           else
             echo "ℹ️ docker-compose.prod.yml not found, skipping compose stop";
           fi &&
-          docker rm -f ts-uplati-bot || true &&
+          docker rm -f ts-uplati-bot 2>/dev/null || true &&
           pkill -f "tsx.*telebot" || true &&
           pkill -f "npm.*bot" || true &&
           sleep 2' || {
@@ -121,11 +123,13 @@ jobs:
             exit 1
           fi &&
           cd /home/github/ts-uplati-bot-main &&
+          docker rm -f ts-uplati-bot 2>/dev/null || true &&
+          COMPOSE_INTERACTIVE_NO_CLI=1 $COMPOSE_CMD -f docker-compose.prod.yml down --remove-orphans 2>/dev/null || true &&
           echo "TELEGRAM_BOT_TOKEN=${{ secrets.TELEGRAM_BOT_TOKEN }}" > .env &&
           echo "SEND_DATA=true" >> .env &&
           echo "NODE_ENV=production" >> .env &&
           echo "✅ .env file created" &&
-          COMPOSE_INTERACTIVE_NO_CLI=1 $COMPOSE_CMD -f docker-compose.prod.yml up -d --build --force-recreate --no-deps ts-uplati-bot-docker &&
+          COMPOSE_INTERACTIVE_NO_CLI=1 $COMPOSE_CMD -f docker-compose.prod.yml up -d --build --force-recreate --remove-orphans --no-deps ts-uplati-bot-docker &&
           echo "✅ Containers started" &&
           sleep 5 &&
           $COMPOSE_CMD -f docker-compose.prod.yml logs --tail=50 ts-uplati-bot-docker' || {

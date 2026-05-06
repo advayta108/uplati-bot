@@ -17,7 +17,7 @@
 </p>
 
 <p align="center">
-  <a href="https://www.npmjs.com/package/@advayta108/uplati-sdk/v/1.1.1"><img src="https://img.shields.io/static/v1?label=npm&message=1.1.1&color=CB3837&logo=npm&logoColor=white&style=flat-square" alt="npm 1.1.1" /></a>
+  <a href="https://www.npmjs.com/package/@advayta108/uplati-sdk/v/1.2.2"><img src="https://img.shields.io/static/v1?label=npm&message=1.2.2&color=CB3837&logo=npm&logoColor=white&style=flat-square" alt="npm 1.2.2" /></a>
   <a href="https://uplati.ru"><img src="https://img.shields.io/badge/API_Version-3.33.23-orange.svg" alt="API Version" /></a>
   <a href="https://github.com/advayta108/uplati-bot/actions/workflows/build.yml"><img src="https://github.com/advayta108/uplati-bot/actions/workflows/build.yml/badge.svg" alt="Build" /></a>
   <a href="https://github.com/advayta108/uplati-bot/actions/workflows/lint.yml"><img src="https://github.com/advayta108/uplati-bot/actions/workflows/lint.yml/badge.svg" alt="Lint" /></a>

@@ -13,7 +13,13 @@ import {
   type MeterRow,
   type UserRow,
 } from './database';
-import { Autopayment, Transaction, UplatiClient, type Sensor } from '@advayta108/uplati-sdk';
+import {
+  Autopayment,
+  Transaction,
+  UplatiClient,
+  type Receipt,
+  type Sensor,
+} from '@advayta108/uplati-sdk';
 import { computeInitialNextSend } from './meterSchedule';
 import { logMessage } from './logging';
 import { syncTelegramBotMenu } from './botCommands';
@@ -70,29 +76,28 @@ function escapeHtmlHref(url: string): string {
   return url.replace(/&/g, '&amp;').replace(/"/g, '&quot;');
 }
 
-/** Дата в квитанции: unix (секунды или мс), ISO или произвольная строка. */
-function formatReceiptDateDisplay(raw: string | undefined): string {
-  if (raw == null || raw.trim() === '') return 'N/A';
+/** Время для сортировки: unix (секунды или мс), ISO; иначе null. */
+function parseReceiptRawToMs(raw: string | undefined): number | null {
+  if (raw == null || raw.trim() === '') return null;
   const s = raw.trim();
   if (/^\d+$/.test(s)) {
     const n = Number(s);
     if (Number.isFinite(n)) {
       const ms = s.length <= 10 ? n * 1000 : n;
       const d = new Date(ms);
-      if (!Number.isNaN(d.getTime())) {
-        return d.toLocaleString('ru-RU', {
-          day: 'numeric',
-          month: 'long',
-          year: 'numeric',
-          hour: '2-digit',
-          minute: '2-digit',
-        });
-      }
+      if (!Number.isNaN(d.getTime())) return ms;
     }
   }
   const parsed = Date.parse(s);
-  if (Number.isFinite(parsed)) {
-    return new Date(parsed).toLocaleString('ru-RU', {
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+/** Дата в квитанции: unix (секунды или мс), ISO или произвольная строка. */
+function formatReceiptDateDisplay(raw: string | undefined): string {
+  if (raw == null || raw.trim() === '') return 'N/A';
+  const ms = parseReceiptRawToMs(raw);
+  if (ms !== null) {
+    return new Date(ms).toLocaleString('ru-RU', {
       day: 'numeric',
       month: 'long',
       year: 'numeric',
@@ -100,7 +105,16 @@ function formatReceiptDateDisplay(raw: string | undefined): string {
       minute: '2-digit',
     });
   }
-  return s;
+  return raw.trim();
+}
+
+/** Сортировка: новее выше (по дате/периоду, иначе по id). */
+function getReceiptSortTimeMs(r: Receipt): number {
+  for (const raw of [r.date, r.period, r.period_name]) {
+    const ms = parseReceiptRawToMs(raw);
+    if (ms !== null) return ms;
+  }
+  return r.id;
 }
 
 /** Разбиение HTML по целым квитанциям, чтобы не резать `<a href="...">`. */
@@ -705,15 +719,16 @@ async function handleReceiptsCommand(ctx: Context): Promise<void> {
     }
 
     const receipts = await uplatiClient.getReceipts();
+    const sorted = [...receipts].sort((a, b) => getReceiptSortTimeMs(b) - getReceiptSortTimeMs(a));
 
-    if (receipts.length === 0) {
+    if (sorted.length === 0) {
       await ctx.reply('У вас нет квитанций (список пуст).');
       return;
     }
 
     const headerHtml = '<b>Ваши квитанции:</b>\n\n';
     const blocks: string[] = [];
-    const topReceipts = receipts.slice(0, 10);
+    const topReceipts = sorted.slice(0, 10);
     for (let i = 0; i < topReceipts.length; i += 1) {
       const receipt = topReceipts[i]!;
       let receiptUrl = receipt.pdf_url;
@@ -747,8 +762,8 @@ async function handleReceiptsCommand(ctx: Context): Promise<void> {
       blocks.push(lines.join('\n'));
     }
 
-    if (receipts.length > 10) {
-      blocks.push(escapeHtmlText(`... и ещё ${receipts.length - 10} квитанций`));
+    if (sorted.length > 10) {
+      blocks.push(escapeHtmlText(`... и ещё ${sorted.length - 10} квитанций`));
     }
 
     await replyReceiptsHtml(ctx, headerHtml, blocks);
