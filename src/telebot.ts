@@ -12,7 +12,7 @@ import {
   type MeterRow,
   type UserRow,
 } from './database';
-import { Receipt, Transaction, UplatiClient, type Sensor } from '@advayta108/uplati-sdk';
+import { Autopayment, Transaction, UplatiClient, type Sensor } from '@advayta108/uplati-sdk';
 import { computeInitialNextSend } from './meterSchedule';
 import { logMessage } from './logging';
 import { syncTelegramBotMenu } from './botCommands';
@@ -283,6 +283,7 @@ bot.command('start', (ctx) => {
     '⚙️ Настраивать автоотправку показаний по дню месяца',
     '🧾 Показывать список квитанций',
     '💳 Показывать последние транзакции',
+    '💸 Показывать автоплатежи',
     '',
     'Доступные команды:',
     '/start',
@@ -291,6 +292,7 @@ bot.command('start', (ctx) => {
     '/update',
     '/receipts',
     '/transactions',
+    '/get_auto_pays',
     '/set_auto_meters',
     '/auto_meters_status',
   ].join('\n');
@@ -536,12 +538,27 @@ bot.command('receipts', async (ctx) => {
     }
 
     let message = 'Ваши квитанции:\n\n';
-    receipts.slice(0, 10).forEach((receipt: Receipt, index: number) => {
-      message += `${index + 1}. ${receipt.number || 'N/A'}\n`;
+    const topReceipts = receipts.slice(0, 10);
+    for (let i = 0; i < topReceipts.length; i += 1) {
+      const receipt = topReceipts[i]!;
+      let receiptUrl = receipt.pdf_url;
+      if (!receiptUrl && receipt.abonent_id) {
+        const fetchedUrl = await uplatiClient.getPaymentDocumentUrl(receipt.abonent_id, receipt.id);
+        if (fetchedUrl) receiptUrl = fetchedUrl;
+      }
+      message += `${i + 1}. ${receipt.period_name || receipt.period || receipt.number || String(receipt.id)}\n`;
+      if (receipt.service_name) {
+        message += `   Услуга: ${receipt.service_name}\n`;
+      }
+      message += `   Период: ${receipt.period_name || receipt.period || 'N/A'}\n`;
       message += `   Дата: ${receipt.date || 'N/A'}\n`;
       message += `   Сумма: ${receipt.amount || 0} руб.\n`;
-      message += `   Статус: ${receipt.status || 'N/A'}\n\n`;
-    });
+      message += `   Статус: ${receipt.status || 'N/A'}\n`;
+      if (receiptUrl) {
+        message += `   PDF: ${receiptUrl}\n`;
+      }
+      message += '\n';
+    }
 
     if (receipts.length > 10) {
       message += `... и ещё ${receipts.length - 10} квитанций`;
@@ -604,6 +621,65 @@ bot.command('transactions', async (ctx) => {
   } catch (error) {
     logMessage(`Ошибка при получении транзакций для пользователя ${chatId}: ${error}`);
     ctx.reply('Произошла ошибка при получении транзакций. Попробуйте снова позже.');
+  }
+});
+
+// Команда для получения списка автоплатежей
+bot.command('get_auto_pays', async (ctx) => {
+  const chatId = ctx.message?.chat.id;
+  if (!chatId) return;
+
+  logMessage(`Команда /get_auto_pays вызвана пользователем ${chatId}`);
+
+  try {
+    const db = await initializeDb();
+    const user = await db.get<UserRow>('SELECT * FROM users WHERE chatId = ?', [chatId]);
+
+    if (!user) {
+      ctx.reply('Вы не зарегистрированы. Пожалуйста, используйте команду /adduser для регистрации.');
+      return;
+    }
+
+    let token = user.token;
+    if (!token || token === 'null') {
+      token = await uplatiClient.authenticate(user.email, user.password);
+      await updateUserToken(chatId, token);
+    } else {
+      uplatiClient.setToken(token);
+    }
+
+    const autopays = await uplatiClient.getAutopayments();
+    if (autopays.length === 0) {
+      ctx.reply('Активных автоплатежей не найдено.');
+      return;
+    }
+
+    let message = 'Ваши автоплатежи:\n\n';
+    autopays.slice(0, 10).forEach((a: Autopayment, index: number) => {
+      message += `${index + 1}. ${a.service_name || a.name || 'N/A'}\n`;
+      message += `   Статус: ${a.status_name || (a.enabled ? 'Активен' : 'Неактивен')}\n`;
+      message += `   Режим: ${a.payment_method || 'N/A'}\n`;
+      message += `   Периодичность: ${a.periodicity_human || a.periodicity || 'N/A'}\n`;
+      message += `   Сумма: ${a.amount ?? 'N/A'} руб.\n`;
+      if (a.max_amount !== undefined) {
+        message += `   Лимит: ${a.max_amount} руб.\n`;
+      }
+      message += `   След. дата: ${a.next_payment_date || 'N/A'}\n`;
+      if (a.card_mask) {
+        message += `   Карта: ${a.card_mask}\n`;
+      }
+      message += '\n';
+    });
+
+    if (autopays.length > 10) {
+      message += `... и ещё ${autopays.length - 10} автоплатежей`;
+    }
+
+    ctx.reply(message);
+    logMessage(`Отправлен список автоплатежей пользователю ${chatId}`);
+  } catch (error) {
+    logMessage(`Ошибка при получении автоплатежей для пользователя ${chatId}: ${error}`);
+    ctx.reply('Произошла ошибка при получении автоплатежей. Попробуйте снова позже.');
   }
 });
 

@@ -62,5 +62,9 @@ describe.skipIf(!runApiTests)('Uplati API (боевой gw3-online)', () => {
     expect(Array.isArray(receipts)).toBe(true);
     expect(Array.isArray(transactions)).toBe(true);
     expect(Array.isArray(autopayments)).toBe(true);
+
+    if (receipts.length > 0) {
+      expect(typeof receipts[0]?.id).toBe('number');
+    }
   });
 });

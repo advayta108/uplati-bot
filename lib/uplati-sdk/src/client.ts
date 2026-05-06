@@ -6,6 +6,7 @@ import {
   getReceipts,
   getTransactions,
   getAutopayments,
+  getPaymentDocumentUrl,
   setAutopayment,
   deleteAutopayment,
   UplatiClientOptions,
@@ -80,6 +81,17 @@ export class UplatiClient {
       throw new Error('Token is required. Please authenticate first.');
     }
     return getAutopayments(this.token, this.options);
+  }
+
+  async getPaymentDocumentUrl(
+    abonentId: number,
+    paymentDocumentId: number,
+    asAttachment = true
+  ): Promise<string | null> {
+    if (!this.token) {
+      throw new Error('Token is required. Please authenticate first.');
+    }
+    return getPaymentDocumentUrl(this.token, abonentId, paymentDocumentId, asAttachment, this.options);
   }
 
   // Настроить автоплатеж

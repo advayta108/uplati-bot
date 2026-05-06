@@ -13,6 +13,7 @@ export const TELEGRAM_BOT_COMMANDS: { command: string; description: string }[] =
   { command: 'auto_meters_status', description: 'Какие счётчики на автоотправке' },
   { command: 'receipts', description: 'Список квитанций' },
   { command: 'transactions', description: 'Последние транзакции' },
+  { command: 'get_auto_pays', description: 'Список автоплатежей' },
 ];
 
 /** Обновить меню команд в клиентах (default + приватные чаты). */

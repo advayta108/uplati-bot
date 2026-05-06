@@ -42,6 +42,21 @@ function asRecord(v: unknown): Record<string, unknown> | null {
   return null;
 }
 
+function asNumber(v: unknown): number | null {
+  if (typeof v === 'number' && Number.isFinite(v)) return v;
+  if (typeof v === 'string' && v.trim() !== '') {
+    const n = Number(v);
+    if (Number.isFinite(n)) return n;
+  }
+  return null;
+}
+
+function asString(v: unknown, fallback = ''): string {
+  if (typeof v === 'string') return v;
+  if (v === null || v === undefined) return fallback;
+  return String(v);
+}
+
 function counterItemToSensor(item: unknown): Sensor {
   const r = asRecord(item);
   if (!r) throw new Error('Counter item is not an object');
@@ -305,12 +320,58 @@ export const getReceipts = async (
   const logger = options?.logger || console.log;
   const baseUrl = options?.baseUrl || BASE_URL;
 
+  const mapPaymentDocument = (raw: unknown): Receipt | null => {
+    const r = asRecord(raw);
+    if (!r) return null;
+    const id = asNumber(r.id);
+    if (!id) return null;
+    const abonent = asRecord(r.abonent);
+    const service = asRecord(abonent?.service);
+    return {
+      id,
+      number: asString(r.id),
+      date: asString(r.period),
+      amount: asNumber(r.amount) ?? 0,
+      status: asString(r.status_name, 'N/A'),
+      service_name: service?.name ? asString(service.name) : undefined,
+      period: asString(r.period),
+      period_name: asString(r.period_name),
+      abonent_id: asNumber(abonent?.id) ?? undefined,
+      address: abonent?.address ? asString(abonent.address) : undefined,
+    };
+  };
+
+  const parseReceiptsPayload = (data: unknown): Receipt[] => {
+    const root = asRecord(data);
+    if (!root) return [];
+    const paymentDocs = Array.isArray(root.payment_documents) ? root.payment_documents : [];
+    if (paymentDocs.length > 0) {
+      return paymentDocs.map(mapPaymentDocument).filter((x): x is Receipt => Boolean(x));
+    }
+    const receipts = Array.isArray(root.receipts) ? root.receipts : [];
+    if (receipts.length > 0) return receipts as Receipt[];
+    return [];
+  };
+
+  try {
+    const response = await axios.get<ReceiptsResponse>(`${baseUrl}/pd/list`, {
+      headers: getHeaders(token),
+    });
+    const parsed = parseReceiptsPayload(response.data);
+    if (parsed.length > 0) return parsed;
+  } catch (error: unknown) {
+    if (error instanceof AxiosError) {
+      logger('Error fetching receipts from /pd/list: ' + (error.response?.data || error.message));
+    } else {
+      logger('Unexpected error fetching receipts from /pd/list: ' + String(error));
+    }
+  }
+
   try {
     const response = await axios.get<ReceiptsResponse>(`${baseUrl}/receipts`, {
       headers: getHeaders(token),
     });
-
-    return response.data.receipts || [];
+    return parseReceiptsPayload(response.data);
   } catch (error: unknown) {
     if (error instanceof AxiosError) {
       logger('Error fetching receipts: ' + (error.response?.data || error.message));
@@ -330,14 +391,33 @@ export const getTransactions = async (
   const logger = options?.logger || console.log;
   const baseUrl = options?.baseUrl || BASE_URL;
 
+  const mapTransaction = (raw: unknown): Transaction | null => {
+    const r = asRecord(raw);
+    if (!r) return null;
+    const id = asNumber(r.id);
+    if (!id) return null;
+    const amount = asNumber(r.amount ?? r.sum ?? r.total) ?? 0;
+    const status = asRecord(r.status);
+    const service = asRecord(r.service);
+    return {
+      id,
+      date: asString(r.date ?? r.created_at ?? r.paid_at),
+      amount,
+      status: asString(status?.name ?? r.status ?? r.state, 'N/A'),
+      type: asString(r.type ?? service?.name ?? r.payment_type, 'transaction'),
+      description: asString(r.description ?? r.comment ?? r.purpose, ''),
+      receipt_id: asNumber(r.receipt_id) ?? undefined,
+    };
+  };
+
   try {
     const params = limit ? { limit } : {};
     const response = await axios.get<TransactionsResponse>(`${baseUrl}/transactions`, {
       headers: getHeaders(token),
       params,
     });
-
-    return response.data.transactions || [];
+    const list = Array.isArray(response.data.transactions) ? response.data.transactions : [];
+    return list.map(mapTransaction).filter((x): x is Transaction => Boolean(x));
   } catch (error: unknown) {
     if (error instanceof AxiosError) {
       logger('Error fetching transactions: ' + (error.response?.data || error.message));
@@ -356,12 +436,38 @@ export const getAutopayments = async (
   const logger = options?.logger || console.log;
   const baseUrl = options?.baseUrl || BASE_URL;
 
+  const mapAutopayment = (raw: unknown): Autopayment | null => {
+    const r = asRecord(raw);
+    if (!r) return null;
+    const id = asNumber(r.id);
+    if (!id) return null;
+    const service = asRecord(r.service);
+    const status = asRecord(r.status);
+    const card = asRecord(r.bank_card);
+    const serviceName = asString(service?.name, 'N/A');
+    return {
+      id,
+      name: serviceName,
+      service_id: asNumber(r.service_id ?? service?.id) ?? 0,
+      service_name: serviceName,
+      amount: asNumber(r.amount) ?? undefined,
+      enabled: asString(status?.alias) === 'active' || asNumber(r.status_id) === 1,
+      next_payment_date: asString(r.next_payment_date),
+      payment_method: asString(r.payment_mode_human ?? r.payment_mode),
+      periodicity: asString(r.periodicity),
+      periodicity_human: asString(r.periodicity_human),
+      status_name: asString(status?.name),
+      max_amount: asNumber(r.max_amount) ?? undefined,
+      card_mask: asString(card?.masked_pan),
+    };
+  };
+
   try {
     const response = await axios.get<AutopaymentsResponse>(`${baseUrl}/autopayments`, {
       headers: getHeaders(token),
     });
-
-    return response.data.autopayments || [];
+    const list = Array.isArray(response.data.autopayments) ? response.data.autopayments : [];
+    return list.map(mapAutopayment).filter((x): x is Autopayment => Boolean(x));
   } catch (error: unknown) {
     if (error instanceof AxiosError) {
       logger('Error fetching autopayments: ' + (error.response?.data || error.message));
@@ -369,6 +475,39 @@ export const getAutopayments = async (
       logger('Unexpected error fetching autopayments: ' + String(error));
     }
     return [];
+  }
+};
+
+export const getPaymentDocumentUrl = async (
+  token: string,
+  abonentId: number,
+  paymentDocumentId: number,
+  asAttachment = true,
+  options?: UplatiClientOptions
+): Promise<string | null> => {
+  const logger = options?.logger || console.log;
+  const baseUrl = options?.baseUrl || BASE_URL;
+  try {
+    const response = await axios.get(
+      `${baseUrl}/pd/${abonentId}/${paymentDocumentId}/url`,
+      {
+        headers: getHeaders(token),
+        params: { as_attachment: asAttachment ? 1 : 0 },
+      }
+    );
+    const root = asRecord(response.data);
+    const url = root ? asString(root.url) : '';
+    return url || null;
+  } catch (error: unknown) {
+    if (error instanceof AxiosError) {
+      logger(
+        `Error fetching payment document url for pd=${paymentDocumentId}: ` +
+          (error.response?.data || error.message)
+      );
+    } else {
+      logger(`Unexpected error fetching payment document url: ${String(error)}`);
+    }
+    return null;
   }
 };
 

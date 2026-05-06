@@ -17,6 +17,10 @@ export interface Receipt {
   status: string;
   service_name?: string;
   period?: string;
+  period_name?: string;
+  abonent_id?: number;
+  address?: string;
+  pdf_url?: string;
 }
 
 // Интерфейс для транзакций
@@ -40,6 +44,11 @@ export interface Autopayment {
   enabled: boolean;
   next_payment_date?: string;
   payment_method?: string;
+  periodicity?: string;
+  periodicity_human?: string;
+  status_name?: string;
+  max_amount?: number;
+  card_mask?: string;
 }
 
 // Интерфейс для настроек автоплатежа
@@ -71,16 +80,17 @@ export interface SensorsResponse {
 
 // Интерфейс для ответа со списком квитанций
 export interface ReceiptsResponse {
-  receipts: Receipt[];
+  receipts?: Receipt[];
+  payment_documents?: unknown[];
 }
 
 // Интерфейс для ответа со списком транзакций
 export interface TransactionsResponse {
-  transactions: Transaction[];
+  transactions?: Transaction[];
 }
 
 // Интерфейс для ответа со списком автоплатежей
 export interface AutopaymentsResponse {
-  autopayments: Autopayment[];
+  autopayments?: Autopayment[];
 }
 
