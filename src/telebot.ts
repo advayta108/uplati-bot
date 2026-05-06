@@ -33,6 +33,33 @@ const uplatiClient = new UplatiClient({
   logger: logMessage,
 });
 
+/** Лимит Telegram на длину одного сообщения — длинные подписанные URL на PDF легко его превышают. */
+const TELEGRAM_MESSAGE_SAFE = 3800;
+
+function chunkTextForTelegram(text: string, maxLen = TELEGRAM_MESSAGE_SAFE): string[] {
+  if (text.length <= maxLen) return [text];
+  const chunks: string[] = [];
+  let rest = text;
+  while (rest.length > 0) {
+    if (rest.length <= maxLen) {
+      chunks.push(rest);
+      break;
+    }
+    let cut = rest.lastIndexOf('\n', maxLen);
+    if (cut < maxLen / 2) cut = maxLen;
+    chunks.push(rest.slice(0, cut));
+    rest = rest.slice(cut).replace(/^\n+/, '');
+  }
+  return chunks;
+}
+
+async function replyLong(ctx: Context, text: string): Promise<void> {
+  const parts = chunkTextForTelegram(text);
+  for (const part of parts) {
+    await ctx.reply(part);
+  }
+}
+
 // Функция для проверки валидности токена
 const isTokenValid = async (token: string): Promise<boolean> => {
   try {
@@ -506,7 +533,7 @@ bot.command('auto_meters_status', async (ctx) => {
 });
 
 // Команда для получения списка квитанций
-bot.command('receipts', async (ctx) => {
+async function handleReceiptsCommand(ctx: Context): Promise<void> {
   const chatId = ctx.message?.chat.id;
   if (!chatId) return;
 
@@ -515,13 +542,14 @@ bot.command('receipts', async (ctx) => {
   try {
     const db = await initializeDb();
     const user = await db.get<UserRow>('SELECT * FROM users WHERE chatId = ?', [chatId]);
-    
+
     if (!user) {
-      ctx.reply('Вы не зарегистрированы. Пожалуйста, используйте команду /adduser для регистрации.');
+      await ctx.reply(
+        'Вы не зарегистрированы. Пожалуйста, используйте команду /adduser для регистрации.'
+      );
       return;
     }
 
-    // Обновляем токен если нужно
     let token = user.token;
     if (!token || token === 'null') {
       token = await uplatiClient.authenticate(user.email, user.password);
@@ -531,9 +559,9 @@ bot.command('receipts', async (ctx) => {
     }
 
     const receipts = await uplatiClient.getReceipts();
-    
+
     if (receipts.length === 0) {
-      ctx.reply('У вас нет квитанций.');
+      await ctx.reply('У вас нет квитанций (список пуст).');
       return;
     }
 
@@ -564,13 +592,16 @@ bot.command('receipts', async (ctx) => {
       message += `... и ещё ${receipts.length - 10} квитанций`;
     }
 
-    ctx.reply(message);
+    await replyLong(ctx, message);
     logMessage(`Отправлен список квитанций пользователю ${chatId}`);
   } catch (error) {
     logMessage(`Ошибка при получении квитанций для пользователя ${chatId}: ${error}`);
-    ctx.reply('Произошла ошибка при получении квитанций. Попробуйте снова позже.');
+    await ctx.reply('Произошла ошибка при получении квитанций. Попробуйте снова позже.');
   }
-});
+}
+
+bot.command('receipts', handleReceiptsCommand);
+bot.command('reciepts', handleReceiptsCommand);
 
 // Команда для получения последних транзакций
 bot.command('transactions', async (ctx) => {
@@ -584,7 +615,9 @@ bot.command('transactions', async (ctx) => {
     const user = await db.get<UserRow>('SELECT * FROM users WHERE chatId = ?', [chatId]);
     
     if (!user) {
-      ctx.reply('Вы не зарегистрированы. Пожалуйста, используйте команду /adduser для регистрации.');
+      await ctx.reply(
+        'Вы не зарегистрированы. Пожалуйста, используйте команду /adduser для регистрации.'
+      );
       return;
     }
 
@@ -598,9 +631,11 @@ bot.command('transactions', async (ctx) => {
     }
 
     const transactions = await uplatiClient.getTransactions(10);
-    
+
     if (transactions.length === 0) {
-      ctx.reply('У вас нет транзакций.');
+      await ctx.reply(
+        'Не удалось получить список транзакций или он пуст. В ЛК история может быть в другом разделе API — при необходимости пришлите Network-запрос из браузера.'
+      );
       return;
     }
 
@@ -616,11 +651,11 @@ bot.command('transactions', async (ctx) => {
       message += '\n';
     });
 
-    ctx.reply(message);
+    await replyLong(ctx, message);
     logMessage(`Отправлен список транзакций пользователю ${chatId}`);
   } catch (error) {
     logMessage(`Ошибка при получении транзакций для пользователя ${chatId}: ${error}`);
-    ctx.reply('Произошла ошибка при получении транзакций. Попробуйте снова позже.');
+    await ctx.reply('Произошла ошибка при получении транзакций. Попробуйте снова позже.');
   }
 });
 

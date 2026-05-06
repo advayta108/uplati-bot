@@ -10,7 +10,6 @@ import {
   AutopaymentSettings,
   AuthResponse,
   ReceiptsResponse,
-  TransactionsResponse,
   AutopaymentsResponse,
 } from './types';
 
@@ -394,7 +393,11 @@ export const getTransactions = async (
   const mapTransaction = (raw: unknown): Transaction | null => {
     const r = asRecord(raw);
     if (!r) return null;
-    const id = asNumber(r.id);
+    const id =
+      asNumber(r.id) ??
+      asNumber(r.operation_id) ??
+      asNumber(r.payment_id) ??
+      asNumber(r.transaction_id);
     if (!id) return null;
     const amount = asNumber(r.amount ?? r.sum ?? r.total) ?? 0;
     const status = asRecord(r.status);
@@ -410,14 +413,64 @@ export const getTransactions = async (
     };
   };
 
-  try {
+  const parseTransactionsPayload = (data: unknown): Transaction[] => {
+    if (typeof data === 'string') {
+      try {
+        data = JSON.parse(data) as unknown;
+      } catch {
+        return [];
+      }
+    }
+    const root = asRecord(data);
+    if (!root) return [];
+    const nested = asRecord(root.data);
+    const arrays: unknown[][] = [];
+    const push = (v: unknown): void => {
+      if (Array.isArray(v)) arrays.push(v);
+    };
+    push(root.transactions);
+    push(root.items);
+    push(root.operations);
+    push(root.payments);
+    push(root.list);
+    if (nested) {
+      push(nested.transactions);
+      push(nested.items);
+      push(nested.operations);
+      push(nested.payments);
+      push(nested.list);
+    }
+    for (const arr of arrays) {
+      const mapped = arr.map(mapTransaction).filter((x): x is Transaction => Boolean(x));
+      if (mapped.length > 0) return mapped;
+    }
+    return [];
+  };
+
+  const fetchList = async (path: string): Promise<Transaction[]> => {
     const params = limit ? { limit } : {};
-    const response = await axios.get<TransactionsResponse>(`${baseUrl}/transactions`, {
+    const response = await axios.get(`${baseUrl}${path}`, {
       headers: getHeaders(token),
       params,
     });
-    const list = Array.isArray(response.data.transactions) ? response.data.transactions : [];
-    return list.map(mapTransaction).filter((x): x is Transaction => Boolean(x));
+    return parseTransactionsPayload(response.data);
+  };
+
+  const paths = ['/transactions', '/user/transactions', '/payment_operations', '/payments'];
+
+  try {
+    for (const path of paths) {
+      try {
+        const list = await fetchList(path);
+        if (list.length > 0) return list;
+      } catch (e: unknown) {
+        if (e instanceof AxiosError && e.response?.status === 404) continue;
+        if (e instanceof AxiosError) {
+          logger(`Transactions ${path}: ${e.response?.data || e.message}`);
+        }
+      }
+    }
+    return [];
   } catch (error: unknown) {
     if (error instanceof AxiosError) {
       logger('Error fetching transactions: ' + (error.response?.data || error.message));
