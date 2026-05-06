@@ -72,40 +72,96 @@ function normalizeSensorRow(sensor: unknown): Sensor {
   };
 }
 
-/** Разбор ответа GET /user/counters или legacy `{ sensors: [...] }` */
+function tryMapCounterLikeItems(items: unknown[]): Sensor[] {
+  const out: Sensor[] = [];
+  for (const item of items) {
+    try {
+      out.push(counterItemToSensor(item));
+    } catch {
+      try {
+        out.push(normalizeSensorRow(item));
+      } catch {
+        /* next item */
+      }
+    }
+  }
+  if (items.length > 0 && out.length === 0) {
+    throw new Error('Meters response: could not map list items to sensors');
+  }
+  return out;
+}
+
+/** Разбор ответа GET /user/counters, /sensors и типовых обёрток API */
 function parseMetersPayload(data: unknown): Sensor[] {
+  if (typeof data === 'string') {
+    try {
+      data = JSON.parse(data) as unknown;
+    } catch {
+      throw new Error('Meters response: body is not valid JSON');
+    }
+  }
   const root = asRecord(data);
   if (!root) throw new Error('Meters response: invalid JSON');
 
   const nested = asRecord(root.data);
+  const deep = nested ? asRecord(nested.data) : null;
 
-  if (Array.isArray(root.sensors)) {
-    return root.sensors.map((x) => normalizeSensorRow(x));
-  }
-  if (Array.isArray(root.counters)) {
-    return root.counters.map((x) => counterItemToSensor(x));
-  }
+  const candidates: unknown[][] = [];
+  if (Array.isArray(root.sensors)) candidates.push(root.sensors);
+  if (Array.isArray(root.counters)) candidates.push(root.counters);
+  const itemsRoot = root.items;
+  if (Array.isArray(itemsRoot)) candidates.push(itemsRoot);
   if (nested) {
-    if (Array.isArray(nested.sensors)) {
-      return nested.sensors.map((x) => normalizeSensorRow(x));
-    }
-    if (Array.isArray(nested.counters)) {
-      return nested.counters.map((x) => counterItemToSensor(x));
+    if (Array.isArray(nested.sensors)) candidates.push(nested.sensors);
+    if (Array.isArray(nested.counters)) candidates.push(nested.counters);
+    if (Array.isArray(nested.items)) candidates.push(nested.items);
+  }
+  if (deep) {
+    if (Array.isArray(deep.counters)) candidates.push(deep.counters);
+    if (Array.isArray(deep.sensors)) candidates.push(deep.sensors);
+  }
+
+  for (const arr of candidates) {
+    if (arr.length > 0) {
+      try {
+        return tryMapCounterLikeItems(arr);
+      } catch {
+        /* try next key */
+      }
     }
   }
 
   throw new Error(
-    'Meters response: expected sensors or counters (or data.sensors / data.counters)'
+    'Meters response: expected sensors, counters, or items (incl. nested under data)'
   );
 }
 
-// Функция для аутентификации (multipart/form-data как в браузере)
+// Функция для аутентификации: JSON (как раньше в Node) и запасной multipart
 export const authenticate = async (
   email: string,
   password: string,
   options?: UplatiClientOptions
 ): Promise<string> => {
   const logger = options?.logger || console.log;
+
+  const tokenFrom = (data: AuthResponse | undefined): string | null => {
+    const t = data?.session?.token;
+    return typeof t === 'string' && t.length > 0 ? t : null;
+  };
+
+  try {
+    const jsonRes = await axios.post<AuthResponse>(
+      AUTH_URL,
+      { email_or_phone: email, password, weboper_token: 'null' },
+      { headers: { ...getHeaders(), 'content-type': 'application/json' } }
+    );
+    const t1 = tokenFrom(jsonRes.data);
+    if (t1) return t1;
+  } catch (e: unknown) {
+    if (e instanceof AxiosError) {
+      logger('Auth JSON attempt: ' + (e.response?.data || e.message));
+    }
+  }
 
   try {
     const formData = new FormData();
@@ -120,11 +176,9 @@ export const authenticate = async (
       },
     });
 
-    if (response.data.session?.token) {
-      return response.data.session.token;
-    } else {
-      throw new Error('Authentication failed');
-    }
+    const t2 = tokenFrom(response.data);
+    if (t2) return t2;
+    throw new Error('Authentication failed: empty session.token');
   } catch (error: unknown) {
     if (error instanceof AxiosError) {
       logger('Error during authentication: ' + (error.response?.data || error.message));
@@ -144,45 +198,58 @@ export const getMetersData = async (
   const baseUrl = options?.baseUrl || BASE_URL;
   const sendDataEnabled = options?.sendDataEnabled !== false;
   const mockBase = getMockBaseUrl(options);
-  const metersUrl = sendDataEnabled
-    ? `${baseUrl}${COUNTERS_PATH}`
-    : `${mockBase}/api/user/counters`;
+  const headers = getHeaders(token);
+
+  if (!sendDataEnabled) {
+    const metersUrl = `${mockBase}/api/user/counters`;
+    try {
+      const response = await axios.get(metersUrl, { headers });
+      return parseMetersPayload(response.data);
+    } catch (error: unknown) {
+      if (error instanceof AxiosError) {
+        logger('Error fetching meters data (mock): ' + (error.response?.data || error.message));
+      } else {
+        logger('Unexpected error fetching meters data (mock): ' + String(error));
+      }
+      throw error;
+    }
+  }
+
+  const fetchParsed = async (path: string): Promise<Sensor[]> => {
+    const response = await axios.get(`${baseUrl}${path}`, { headers });
+    return parseMetersPayload(response.data);
+  };
 
   try {
-    const response = await axios.get(metersUrl, {
-      headers: getHeaders(token),
-    });
-
-    return parseMetersPayload(response.data);
-  } catch (error: unknown) {
-    if (
-      sendDataEnabled &&
-      error instanceof AxiosError &&
-      error.response?.status === 404
-    ) {
+    return await fetchParsed('/sensors');
+  } catch (firstErr: unknown) {
+    const is404 = firstErr instanceof AxiosError && firstErr.response?.status === 404;
+    const isParse =
+      firstErr instanceof Error && firstErr.message.includes('Meters response');
+    if (is404 || isParse) {
+      logger(`GET /sensors unusable (${String(firstErr)}), trying ${COUNTERS_PATH}`);
       try {
-        const response = await axios.get(`${baseUrl}/sensors`, {
-          headers: getHeaders(token),
-        });
-        return parseMetersPayload(response.data);
-      } catch (fallbackErr: unknown) {
-        if (fallbackErr instanceof AxiosError) {
+        return await fetchParsed(COUNTERS_PATH);
+      } catch (secondErr: unknown) {
+        if (secondErr instanceof AxiosError) {
           logger(
-            'Error fetching meters data (fallback /sensors): ' +
-              (fallbackErr.response?.data || fallbackErr.message)
+            'Error fetching meters data (/user/counters): ' +
+              (secondErr.response?.data || secondErr.message)
           );
         } else {
-          logger('Unexpected error fetching meters data (fallback): ' + String(fallbackErr));
+          logger('Error after /user/counters: ' + String(secondErr));
         }
-        throw fallbackErr;
+        throw secondErr;
       }
     }
-    if (error instanceof AxiosError) {
-      logger('Error fetching meters data: ' + (error.response?.data || error.message));
+    if (firstErr instanceof AxiosError) {
+      logger(
+        'Error fetching meters data (/sensors): ' + (firstErr.response?.data || firstErr.message)
+      );
     } else {
-      logger('Unexpected error fetching meters data: ' + String(error));
+      logger('Unexpected error fetching meters data: ' + String(firstErr));
     }
-    throw error;
+    throw firstErr;
   }
 };
 

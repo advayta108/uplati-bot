@@ -649,25 +649,37 @@ bot.on('text', async (ctx) => {
       ctx.reply('Пожалуйста, введите свой пароль:');
     } else if (userState.state === 'awaiting_password') {
       userState.password = ctx.message.text;
-      logMessage(`Пользователь ${chatId} ввёл пароль: ${userState.password}`);
+      logMessage(`Пользователь ${chatId} ввёл пароль (длина: ${userState.password?.length ?? 0})`);
 
       const token = await uplatiClient.authenticate(userState.email!, userState.password!);
-      logMessage(`Авторизация успешна для пользователя ${chatId} с токеном: ${token}`);
+      logMessage(`Авторизация успешна для пользователя ${chatId}`);
 
       await addUser(chatId, userState.email!, userState.password!, token);
 
-      const sensors = await uplatiClient.getMeters();
-      for (const sensor of sensors) {
-        await upsertMeter(chatId, sensor.id, sensor.display_name, sensor.last_sensor_value, sensor.last_sensor_date);
+      try {
+        const sensors = await uplatiClient.getMeters();
+        for (const sensor of sensors) {
+          await upsertMeter(
+            chatId,
+            sensor.id,
+            sensor.display_name,
+            sensor.last_sensor_value,
+            sensor.last_sensor_date
+          );
+        }
+        logMessage(`Счётчики для пользователя ${chatId} сохранены.`);
+        await ctx.reply('Ваши данные и счётчики успешно сохранены.');
+      } catch (meterErr) {
+        logMessage(`Ошибка загрузки счётчиков после входа ${chatId}: ${meterErr}`);
+        await ctx.reply(
+          'Вход выполнен, но не удалось получить список счётчиков с сервера. Позже выполните /update или /status.'
+        );
       }
-
-      logMessage(`Счётчики для пользователя ${chatId} сохранены.`);
-      ctx.reply('Ваши данные и счётчики успешно сохранены.');
       userState.state = 'authenticated';
     }
   } catch (error) {
     logMessage(`Ошибка при авторизации пользователя ${chatId}: ${error}`);
-    ctx.reply('Ошибка при авторизации. Попробуйте снова.');
+    await ctx.reply('Ошибка при авторизации (логин или пароль). Попробуйте снова командой /adduser.');
   }
 });
 

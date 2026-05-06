@@ -1,16 +1,22 @@
-import { beforeAll, describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { UplatiClient } from '@advayta108/uplati-sdk';
 
 const email = process.env.TEST_USER_EMAIL;
 const pass = process.env.TEST_USER_PASS;
 const runApiTests = Boolean(email && pass);
 
-beforeAll(() => {
-  if (process.env.CI === 'true' && !runApiTests) {
-    throw new Error(
-      'В CI задайте secrets TEST_USER_EMAIL и TEST_USER_PASS для интеграционных тестов API.'
-    );
-  }
+/**
+ * Не полагаться на `beforeAll` при полностью пропущенном `describe`: Vitest может не вызывать хук,
+ * и CI пройдёт без секретов. Этот тест всегда выполняется.
+ */
+describe('CI: secrets for API integration', () => {
+  it('requires TEST_USER_EMAIL and TEST_USER_PASS when CI=true', () => {
+    if (process.env.CI !== 'true') return;
+    expect(
+      runApiTests,
+      'Add repository secrets TEST_USER_EMAIL and TEST_USER_PASS (GitHub → Settings → Secrets).'
+    ).toBe(true);
+  });
 });
 
 describe.skipIf(!runApiTests)('Uplati API (боевой gw3-online)', () => {

@@ -9,6 +9,8 @@ services:
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
       - SEND_DATA=${SEND_DATA:-true}
       - NODE_ENV=production
+      # Явный каталог БД: npm workspace ставит cwd в packages/uplati-bot, иначе SQLite уезжает мимо volume
+      - UPLATI_DATA_DIR=/home/node/app/data
     volumes:
       - ./data:/home/node/app/data
       - ./logs:/home/node/app/logs

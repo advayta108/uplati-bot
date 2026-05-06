@@ -93,7 +93,9 @@ jobs:
     - name: Copy repository to server
       run: |
         echo "Copying files to server..."
-        tar --exclude=.git --exclude=node_modules --exclude=build --exclude=dist --exclude=.env -czf - . \
+        tar --exclude=.git --exclude=node_modules --exclude=build --exclude=dist --exclude=.env \
+          --exclude='data/users.db' --exclude='data/*.db' --exclude='data/*.db-wal' --exclude='data/*.db-shm' \
+          -czf - . \
           | ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -p 22 root@$SERVER_IP \
           'tar -xzf - -C /home/github/ts-uplati-bot-main' || {
           echo "❌ Failed to copy files to server"

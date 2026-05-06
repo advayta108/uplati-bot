@@ -3,13 +3,38 @@ import path from 'path';
 import { logMessage } from './logging';  // Импорт логирования
 import fs from 'fs';
 
-/** Путь к SQLite; для тестов задайте абсолютный или относительный `USERS_DB_PATH` до импорта модуля */
+/** Корень монорепо (где лежит lib/uplati-sdk), если cwd — workspace вроде packages/uplati-bot */
+function findMonorepoRoot(): string {
+  let dir = process.cwd();
+  for (let i = 0; i < 10; i++) {
+    const marker = path.join(dir, 'lib', 'uplati-sdk', 'package.json');
+    if (fs.existsSync(marker)) {
+      return dir;
+    }
+    const parent = path.dirname(dir);
+    if (parent === dir) break;
+    dir = parent;
+  }
+  return process.cwd();
+}
+
+/**
+ * Путь к SQLite:
+ * - `USERS_DB_PATH` — полный путь или относительно cwd
+ * - `UPLATI_DATA_DIR` — каталог данных (в Docker: смонтированный `/home/node/app/data`)
+ * - иначе `{monorepo}/data/users.db`, а не cwd/data (npm workspace меняет cwd)
+ */
 function getUsersDbPath(): string {
   const raw = process.env.USERS_DB_PATH?.trim();
   if (raw) {
     return path.isAbsolute(raw) ? raw : path.join(process.cwd(), raw);
   }
-  return path.join(process.cwd(), 'data', 'users.db');
+  const dataDir = process.env.UPLATI_DATA_DIR?.trim();
+  if (dataDir) {
+    const resolved = path.isAbsolute(dataDir) ? dataDir : path.join(process.cwd(), dataDir);
+    return path.join(resolved, 'users.db');
+  }
+  return path.join(findMonorepoRoot(), 'data', 'users.db');
 }
 
 const ensureDirectoryExists = (filePath: string) => {
