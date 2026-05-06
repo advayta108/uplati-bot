@@ -15,6 +15,7 @@ import {
 import { Receipt, Transaction, UplatiClient, type Sensor } from '@advayta108/uplati-sdk';
 import { computeInitialNextSend } from './meterSchedule';
 import { logMessage } from './logging';
+import { syncTelegramBotMenu } from './botCommands';
 
 dotenv.config();
 
@@ -687,6 +688,12 @@ bot.on('text', async (ctx) => {
 bot.launch()
   .then(async () => {
     logMessage('🤖 Telegram бот запущен и работает через polling API');
+    try {
+      await syncTelegramBotMenu(bot.telegram);
+      logMessage('Меню slash-команд синхронизировано (setMyCommands)');
+    } catch (err) {
+      logMessage(`Не удалось обновить меню команд: ${err}`);
+    }
     // Небольшая задержка перед обновлением данных
     setTimeout(async () => {
       await updateAllUsersData();

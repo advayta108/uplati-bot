@@ -11,6 +11,7 @@
   "scripts": {
     "start": "npm run start --workspace=@advayta108/uplati-bot",
     "bot": "npm run bot --workspace=@advayta108/uplati-bot",
+    "update-bot-commands": "npx tsx src/update-bot-commands.ts",
     "lint": "eslint . --config eslint.config.mjs",
     "test": "vitest run",
     "server": "npm run server --workspace=@advayta108/uplati-bot",

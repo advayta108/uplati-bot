@@ -133,6 +133,24 @@ jobs:
           exit 1
         }
 
+    - name: Sync Telegram bot menu (setMyCommands)
+      run: |
+        ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -p 22 root@$SERVER_IP '
+          if docker compose version >/dev/null 2>&1; then
+            COMPOSE_CMD="docker compose"
+          elif command -v docker-compose >/dev/null 2>&1; then
+            COMPOSE_CMD="docker-compose"
+          else
+            echo "❌ Neither docker compose plugin nor docker-compose is installed" &&
+            exit 1
+          fi &&
+          cd /home/github/ts-uplati-bot-main &&
+          sleep 3 &&
+          COMPOSE_INTERACTIVE_NO_CLI=1 $COMPOSE_CMD -f docker-compose.prod.yml exec -T ts-uplati-bot-docker npx tsx src/update-bot-commands.ts' || {
+          echo "❌ update-bot-commands failed"
+          exit 1
+        }
+
     - name: Check running container
       run: |
         ssh -o StrictHostKeyChecking=no -p 22 root@$SERVER_IP '

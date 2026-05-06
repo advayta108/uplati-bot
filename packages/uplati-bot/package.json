@@ -6,6 +6,7 @@
   "scripts": {
     "start": "npx tsx ../../run.ts",
     "bot": "npx tsx ../../src/telebot.ts",
+    "update-bot-commands": "npx tsx ../../src/update-bot-commands.ts",
     "test": "npx vitest run --config ../../vitest.config.ts",
     "server": "npx tsx ../../server.ts",
     "api": "npx tsx ../../src/api.ts",
