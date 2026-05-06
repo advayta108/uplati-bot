@@ -8,6 +8,7 @@ import {
   updateUserToken,
   deleteMetersExceptIds,
   setMeterAutoConfig,
+  disableMeterAutoSend,
   getMetersWithAutoForUser,
   type MeterRow,
   type UserRow,
@@ -228,6 +229,9 @@ type SetAutoMetersWizard = {
 
 const setAutoWizard: Record<number, SetAutoMetersWizard> = {};
 
+/** Ожидание номера счётчика для /del_auto_meters (список с автоотправкой). */
+const delAutoWizard: Record<number, MeterRow[]> = {};
+
 function parsePositiveNumber(text: string): number | null {
   const normalized = text.replace(',', '.').trim();
   const n = Number(normalized);
@@ -378,6 +382,11 @@ const userData: Record<number, UserData> = {};
 
 // Приветственная команда
 bot.command('start', (ctx) => {
+  const chatId = ctx.message?.chat.id;
+  if (chatId !== undefined) {
+    delete setAutoWizard[chatId];
+    delete delAutoWizard[chatId];
+  }
   const message = [
     'Привет! Я бот сервиса «Система город»',
     '',
@@ -385,10 +394,10 @@ bot.command('start', (ctx) => {
     '🔐 Авторизовать и сохранить данные пользователя',
     '📥 Обновлять данные по счётчикам из API',
     '📊 Показывать статус счётчиков (сверка с API и обновление БД)',
-    '⚙️ Настраивать автоотправку показаний по дню месяца',
+    '⚙️ Настраивать и отключать автоотправку показаний по дню месяца',
     '🧾 Показывать список квитанций',
     '💳 Показывать последние транзакции',
-    '💸 Показывать автоплатежи',
+    '💸 Показывать автоплатежи (банк)',
     '',
     'Доступные команды:',
     '/start',
@@ -397,10 +406,10 @@ bot.command('start', (ctx) => {
     '/update',
     '/receipts',
     '/transactions',
-    '/autopayments',
     '/get_auto_pays',
     '/set_auto_meters',
     '/auto_meters_status',
+    '/del_auto_meters',
   ].join('\n');
 
   ctx.reply(message);
@@ -482,6 +491,28 @@ async function handleSetAutoWizardText(ctx: Context, chatId: number) {
   }
 }
 
+async function handleDelAutoWizardText(ctx: Context, chatId: number): Promise<void> {
+  const rows = delAutoWizard[chatId];
+  if (!rows) return;
+  const text = ctx.message && 'text' in ctx.message ? ctx.message.text.trim() : '';
+  if (!text) return;
+  const lower = text.toLowerCase();
+  if (lower === 'отмена' || lower === 'cancel') {
+    delete delAutoWizard[chatId];
+    await ctx.reply('Отключение автоотправки отменено.');
+    return;
+  }
+  const n = parseInt(text, 10);
+  if (!Number.isInteger(n) || n < 1 || n > rows.length) {
+    await ctx.reply(`Введите номер от 1 до ${rows.length} или «отмена».`);
+    return;
+  }
+  const row = rows[n - 1]!;
+  await disableMeterAutoSend(chatId, row.meterId);
+  delete delAutoWizard[chatId];
+  await ctx.reply(`Автоотправка отключена для счётчика «${row.meterName}».`);
+}
+
 // Команда для получения текущего статуса счётчиков (сверка с API и обновление БД)
 bot.command('status', async (ctx) => {
   const chatId = ctx.message?.chat.id;
@@ -548,6 +579,7 @@ bot.command('set_auto_meters', async (ctx) => {
   const chatId = ctx.message?.chat.id;
   if (!chatId) return;
   logMessage(`Команда /set_auto_meters от ${chatId}`);
+  delete delAutoWizard[chatId];
   try {
     const sync = await syncMetersFromApiForChat(chatId);
     if (!sync.ok) {
@@ -608,6 +640,41 @@ bot.command('auto_meters_status', async (ctx) => {
   } catch (error) {
     logMessage(`Ошибка /auto_meters_status для ${chatId}: ${error}`);
     await ctx.reply('Не удалось прочитать настройки. Попробуйте позже.');
+  }
+});
+
+bot.command('del_auto_meters', async (ctx) => {
+  const chatId = ctx.message?.chat.id;
+  if (!chatId) return;
+  delete setAutoWizard[chatId];
+  logMessage(`Команда /del_auto_meters от ${chatId}`);
+  try {
+    const db = await initializeDb();
+    const user = await db.get<UserRow>('SELECT * FROM users WHERE chatId = ?', [chatId]);
+    if (!user) {
+      await ctx.reply('Вы не зарегистрированы. Используйте /adduser.');
+      return;
+    }
+    const rows = await getMetersWithAutoForUser(chatId);
+    if (rows.length === 0) {
+      await ctx.reply(
+        'Нет счётчиков с настроенной автоотправкой. Список: /auto_meters_status, настройка: /set_auto_meters.'
+      );
+      return;
+    }
+    delAutoWizard[chatId] = rows;
+    let msg =
+      'Отключение автоотправки показаний.\nСчётчики с автоотправкой (как в /auto_meters_status):\n\n';
+    rows.forEach((m, i) => {
+      const next = m.nextSendDate ? new Date(m.nextSendDate).toLocaleString('ru-RU') : '—';
+      msg += `${i + 1}. ${m.meterName}\n   приращение: ${m.increment}, день месяца: ${m.auto_send_day}, следующая отправка: ${next}\n`;
+    });
+    msg +=
+      '\nОтветьте одним числом — номер строки, для какого счётчика отключить автоотправку. Для отмены напишите «отмена».';
+    await ctx.reply(msg);
+  } catch (error) {
+    logMessage(`Ошибка /del_auto_meters для ${chatId}: ${error}`);
+    await ctx.reply('Не удалось загрузить список. Попробуйте позже.');
   }
 });
 
@@ -751,12 +818,11 @@ bot.command('transactions', async (ctx) => {
   }
 });
 
-// Список автоплатежей: /autopayments в меню Telegram, /get_auto_pays — алиас
-async function handleAutopaymentsCommand(ctx: Context, invokedAs: string): Promise<void> {
+async function handleAutopaymentsCommand(ctx: Context): Promise<void> {
   const chatId = ctx.message?.chat.id;
   if (!chatId) return;
 
-  logMessage(`Команда ${invokedAs} вызвана пользователем ${chatId}`);
+  logMessage(`Команда /get_auto_pays вызвана пользователем ${chatId}`);
 
   try {
     const db = await initializeDb();
@@ -810,8 +876,7 @@ async function handleAutopaymentsCommand(ctx: Context, invokedAs: string): Promi
   }
 }
 
-bot.command('autopayments', (ctx) => void handleAutopaymentsCommand(ctx, '/autopayments'));
-bot.command('get_auto_pays', (ctx) => void handleAutopaymentsCommand(ctx, '/get_auto_pays'));
+bot.command('get_auto_pays', (ctx) => void handleAutopaymentsCommand(ctx));
 
 // Команда для начала регистрации /adduser
 bot.command('adduser', (ctx) => {
@@ -839,6 +904,11 @@ bot.on('text', async (ctx) => {
 
   if (setAutoWizard[chatId]) {
     await handleSetAutoWizardText(ctx, chatId);
+    return;
+  }
+
+  if (delAutoWizard[chatId]) {
+    await handleDelAutoWizardText(ctx, chatId);
     return;
   }
 

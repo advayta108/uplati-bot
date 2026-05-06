@@ -11,10 +11,10 @@ export const TELEGRAM_BOT_COMMANDS: { command: string; description: string }[] =
   { command: 'update', description: 'Обновить данные счётчиков из API' },
   { command: 'set_auto_meters', description: 'Мастер автоотправки показаний' },
   { command: 'auto_meters_status', description: 'Какие счётчики на автоотправке' },
+  { command: 'del_auto_meters', description: 'Отключить автоотправку по номеру' },
   { command: 'receipts', description: 'Список квитанций' },
   { command: 'transactions', description: 'Последние транзакции' },
-  // В меню — понятное имя; `/get_auto_pays` по-прежнему обрабатывается в коде как алиас
-  { command: 'autopayments', description: 'Показать автоплатежи' },
+  { command: 'get_auto_pays', description: 'Показать автоплатежи' },
 ];
 
 /** Обновить меню команд в клиентах (default + приватные чаты). */

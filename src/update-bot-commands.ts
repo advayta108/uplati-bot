@@ -1,8 +1,8 @@
 /**
  * Публикует slash-команды в меню Telegram (кнопка «/» у поля ввода).
  * Полный перечень — в `TELEGRAM_BOT_COMMANDS` (`./botCommands.ts`), сейчас это:
- * start, adduser, status, update, set_auto_meters, auto_meters_status,
- * receipts, transactions, autopayments.
+ * start, adduser, status, update, set_auto_meters, auto_meters_status, del_auto_meters,
+ * receipts, transactions, get_auto_pays.
  *
  * Запуск: `npm run update-bot-commands` (нужен TELEGRAM_BOT_TOKEN).
  * То же обновление вызывается при старте бота через `syncTelegramBotMenu`.

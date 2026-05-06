@@ -235,6 +235,16 @@ export const setMeterAutoConfig = async (
   logMessage(`Автоотправка: user=${userId} meter=${meterId} increment=${increment} day=${autoSendDay}`);
 };
 
+/** Сброс автоотправки показаний для счётчика (приращение, день, дата следующей отправки). */
+export const disableMeterAutoSend = async (userId: number, meterId: number) => {
+  const db = await initializeDb();
+  await db.run(
+    'UPDATE meters SET increment = NULL, auto_send_day = NULL, nextSendDate = NULL WHERE userId = ? AND meterId = ?',
+    [userId, meterId]
+  );
+  logMessage(`Автоотправка отключена: user=${userId} meter=${meterId}`);
+};
+
 export const getMetersWithAutoForUser = async (userId: number) => {
   const db = await initializeDb();
   return await db.all<MeterRow>(
