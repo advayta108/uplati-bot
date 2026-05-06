@@ -60,6 +60,84 @@ async function replyLong(ctx: Context, text: string): Promise<void> {
   }
 }
 
+function escapeHtmlText(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+/** Атрибут href для Telegram HTML (кавычки и &). */
+function escapeHtmlHref(url: string): string {
+  return url.replace(/&/g, '&amp;').replace(/"/g, '&quot;');
+}
+
+/** Дата в квитанции: unix (секунды или мс), ISO или произвольная строка. */
+function formatReceiptDateDisplay(raw: string | undefined): string {
+  if (raw == null || raw.trim() === '') return 'N/A';
+  const s = raw.trim();
+  if (/^\d+$/.test(s)) {
+    const n = Number(s);
+    if (Number.isFinite(n)) {
+      const ms = s.length <= 10 ? n * 1000 : n;
+      const d = new Date(ms);
+      if (!Number.isNaN(d.getTime())) {
+        return d.toLocaleString('ru-RU', {
+          day: 'numeric',
+          month: 'long',
+          year: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit',
+        });
+      }
+    }
+  }
+  const parsed = Date.parse(s);
+  if (Number.isFinite(parsed)) {
+    return new Date(parsed).toLocaleString('ru-RU', {
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  }
+  return s;
+}
+
+/** Разбиение HTML по целым квитанциям, чтобы не резать `<a href="...">`. */
+function chunkReceiptBlocks(blocks: string[], maxLen: number, header: string): string[] {
+  const out: string[] = [];
+  let acc: string[] = [];
+
+  const prefixFor = (): string => (out.length === 0 ? header : '…\n\n');
+
+  for (const block of blocks) {
+    const trial = acc.length === 0 ? [block] : [...acc, block];
+    const body = trial.join('\n\n');
+    if (prefixFor().length + body.length <= maxLen) {
+      acc = trial;
+    } else {
+      if (acc.length > 0) {
+        out.push(prefixFor() + acc.join('\n\n'));
+      }
+      acc = [block];
+      if (prefixFor().length + acc.join('\n\n').length > maxLen) {
+        out.push(prefixFor() + acc.join('\n\n'));
+        acc = [];
+      }
+    }
+  }
+  if (acc.length > 0) {
+    out.push(prefixFor() + acc.join('\n\n'));
+  }
+  return out;
+}
+
+async function replyReceiptsHtml(ctx: Context, header: string, blocks: string[]): Promise<void> {
+  const parts = chunkReceiptBlocks(blocks, TELEGRAM_MESSAGE_SAFE, header);
+  for (const part of parts) {
+    await ctx.reply(part, { parse_mode: 'HTML', link_preview_options: { is_disabled: true } });
+  }
+}
+
 // Функция для проверки валидности токена
 const isTokenValid = async (token: string): Promise<boolean> => {
   try {
@@ -319,6 +397,7 @@ bot.command('start', (ctx) => {
     '/update',
     '/receipts',
     '/transactions',
+    '/autopayments',
     '/get_auto_pays',
     '/set_auto_meters',
     '/auto_meters_status',
@@ -565,7 +644,8 @@ async function handleReceiptsCommand(ctx: Context): Promise<void> {
       return;
     }
 
-    let message = 'Ваши квитанции:\n\n';
+    const headerHtml = '<b>Ваши квитанции:</b>\n\n';
+    const blocks: string[] = [];
     const topReceipts = receipts.slice(0, 10);
     for (let i = 0; i < topReceipts.length; i += 1) {
       const receipt = topReceipts[i]!;
@@ -574,25 +654,37 @@ async function handleReceiptsCommand(ctx: Context): Promise<void> {
         const fetchedUrl = await uplatiClient.getPaymentDocumentUrl(receipt.abonent_id, receipt.id);
         if (fetchedUrl) receiptUrl = fetchedUrl;
       }
-      message += `${i + 1}. ${receipt.period_name || receipt.period || receipt.number || String(receipt.id)}\n`;
-      if (receipt.service_name) {
-        message += `   Услуга: ${receipt.service_name}\n`;
-      }
-      message += `   Период: ${receipt.period_name || receipt.period || 'N/A'}\n`;
-      message += `   Дата: ${receipt.date || 'N/A'}\n`;
-      message += `   Сумма: ${receipt.amount || 0} руб.\n`;
-      message += `   Статус: ${receipt.status || 'N/A'}\n`;
-      if (receiptUrl) {
-        message += `   PDF: ${receiptUrl}\n`;
-      }
-      message += '\n';
+      const title =
+        receipt.period_name?.trim() ||
+        receipt.period?.trim() ||
+        receipt.number ||
+        String(receipt.id);
+      const periodRaw = receipt.period_name?.trim() || receipt.period?.trim();
+      const periodShown = periodRaw ? formatReceiptDateDisplay(periodRaw) : 'N/A';
+      const dateShown = formatReceiptDateDisplay(receipt.date);
+      const lines: string[] = [
+        `${i + 1}. ${escapeHtmlText(title)}`,
+        ...(receipt.service_name
+          ? [`   Услуга: ${escapeHtmlText(receipt.service_name)}`]
+          : []),
+        `   Период: ${escapeHtmlText(periodShown)}`,
+        `   Дата: ${escapeHtmlText(dateShown)}`,
+        `   Сумма: ${escapeHtmlText(String(receipt.amount ?? 0))} руб.`,
+        `   Статус: ${escapeHtmlText(receipt.status || 'N/A')}`,
+        ...(receiptUrl
+          ? [
+              `   Квитанция: <a href="${escapeHtmlHref(receiptUrl)}">скачать PDF</a>`,
+            ]
+          : []),
+      ];
+      blocks.push(lines.join('\n'));
     }
 
     if (receipts.length > 10) {
-      message += `... и ещё ${receipts.length - 10} квитанций`;
+      blocks.push(escapeHtmlText(`... и ещё ${receipts.length - 10} квитанций`));
     }
 
-    await replyLong(ctx, message);
+    await replyReceiptsHtml(ctx, headerHtml, blocks);
     logMessage(`Отправлен список квитанций пользователю ${chatId}`);
   } catch (error) {
     logMessage(`Ошибка при получении квитанций для пользователя ${chatId}: ${error}`);
@@ -659,19 +751,19 @@ bot.command('transactions', async (ctx) => {
   }
 });
 
-// Команда для получения списка автоплатежей
-bot.command('get_auto_pays', async (ctx) => {
+// Список автоплатежей: /autopayments в меню Telegram, /get_auto_pays — алиас
+async function handleAutopaymentsCommand(ctx: Context, invokedAs: string): Promise<void> {
   const chatId = ctx.message?.chat.id;
   if (!chatId) return;
 
-  logMessage(`Команда /get_auto_pays вызвана пользователем ${chatId}`);
+  logMessage(`Команда ${invokedAs} вызвана пользователем ${chatId}`);
 
   try {
     const db = await initializeDb();
     const user = await db.get<UserRow>('SELECT * FROM users WHERE chatId = ?', [chatId]);
 
     if (!user) {
-      ctx.reply('Вы не зарегистрированы. Пожалуйста, используйте команду /adduser для регистрации.');
+      await ctx.reply('Вы не зарегистрированы. Пожалуйста, используйте команду /adduser для регистрации.');
       return;
     }
 
@@ -685,7 +777,7 @@ bot.command('get_auto_pays', async (ctx) => {
 
     const autopays = await uplatiClient.getAutopayments();
     if (autopays.length === 0) {
-      ctx.reply('Активных автоплатежей не найдено.');
+      await ctx.reply('Активных автоплатежей не найдено.');
       return;
     }
 
@@ -710,13 +802,16 @@ bot.command('get_auto_pays', async (ctx) => {
       message += `... и ещё ${autopays.length - 10} автоплатежей`;
     }
 
-    ctx.reply(message);
+    await ctx.reply(message);
     logMessage(`Отправлен список автоплатежей пользователю ${chatId}`);
   } catch (error) {
     logMessage(`Ошибка при получении автоплатежей для пользователя ${chatId}: ${error}`);
-    ctx.reply('Произошла ошибка при получении автоплатежей. Попробуйте снова позже.');
+    await ctx.reply('Произошла ошибка при получении автоплатежей. Попробуйте снова позже.');
   }
-});
+}
+
+bot.command('autopayments', (ctx) => void handleAutopaymentsCommand(ctx, '/autopayments'));
+bot.command('get_auto_pays', (ctx) => void handleAutopaymentsCommand(ctx, '/get_auto_pays'));
 
 // Команда для начала регистрации /adduser
 bot.command('adduser', (ctx) => {

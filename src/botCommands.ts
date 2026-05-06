@@ -13,7 +13,8 @@ export const TELEGRAM_BOT_COMMANDS: { command: string; description: string }[] =
   { command: 'auto_meters_status', description: 'Какие счётчики на автоотправке' },
   { command: 'receipts', description: 'Список квитанций' },
   { command: 'transactions', description: 'Последние транзакции' },
-  { command: 'get_auto_pays', description: 'Список автоплатежей' },
+  // В меню — понятное имя; `/get_auto_pays` по-прежнему обрабатывается в коде как алиас
+  { command: 'autopayments', description: 'Показать автоплатежи' },
 ];
 
 /** Обновить меню команд в клиентах (default + приватные чаты). */
