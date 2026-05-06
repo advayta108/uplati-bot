@@ -51,11 +51,17 @@ export interface AutopaymentSettings {
   threshold?: number;
 }
 
-// Интерфейс для ответа авторизации
+// Интерфейс для ответа авторизации (например status 202 и api_version в теле)
 export interface AuthResponse {
+  status?: number;
   session: {
     token: string;
+    user_id?: number;
+    valid_thru?: string;
+    email?: string;
   };
+  api_version?: string;
+  client_upgrade_required?: boolean;
 }
 
 // Интерфейс для ответа со списком счётчиков

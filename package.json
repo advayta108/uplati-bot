@@ -12,7 +12,7 @@
     "start": "npm run start --workspace=@advayta108/uplati-bot",
     "bot": "npm run bot --workspace=@advayta108/uplati-bot",
     "lint": "eslint . --config eslint.config.mjs",
-    "test": "npm run test --workspace=@advayta108/uplati-bot",
+    "test": "vitest run",
     "server": "npm run server --workspace=@advayta108/uplati-bot",
     "api": "npm run api --workspace=@advayta108/uplati-bot",
     "build": "npm run build --workspace=@advayta108/uplati-bot",
@@ -51,7 +51,8 @@
     "eslint": "^10.2.0",
     "eslint-plugin-codegen": "^0.34.1",
     "typescript": "^6.0.2",
-    "typescript-eslint": "^8.58.2"
+    "typescript-eslint": "^8.58.2",
+    "vitest": "^3.2.4"
   },
   "overrides": {
     "flatted": "3.4.2",

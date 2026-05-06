@@ -18,8 +18,8 @@ export default [
     languageOptions: {
       parser: tsParser, // Указываем tsParser как используемый парсер
       parserOptions: {
-        project: './tsconfig.json', // Указываем путь к tsconfig.json для TypeScript
-        tsconfigRootDir: __dirname, // Корневая директория для tsconfig.json
+        project: './tsconfig.eslint.json',
+        tsconfigRootDir: __dirname,
         ecmaVersion: 'latest',
         sourceType: 'module',
       },
@@ -32,7 +32,11 @@ export default [
         Buffer: 'readonly',
         require: 'readonly',
         module: 'readonly',
-        // Убираем NodeJS из глобальных, TypeScript уже должен его знать
+        describe: 'readonly',
+        it: 'readonly',
+        expect: 'readonly',
+        beforeAll: 'readonly',
+        afterAll: 'readonly',
       },
     },
     plugins: {

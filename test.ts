@@ -17,8 +17,14 @@ const sendValuesAndScheduleNext = async (token: string, meterValues: { meter: Se
       
       for (const { meter, newValue } of meterValues) {
         try {
-          await sendSensorValue(token, meter.id, newValue);
-          console.log(`Отправлено новое значение для ${meter.display_name}: ${newValue} в ${now.toLocaleString('ru-RU', { timeZone: localTimeZone })}`);
+          const ok = await sendSensorValue(token, meter.id, newValue);
+          if (ok) {
+            console.log(
+              `Отправлено новое значение для ${meter.display_name}: ${newValue} в ${now.toLocaleString('ru-RU', { timeZone: localTimeZone })}`
+            );
+          } else {
+            console.error(`API отклонило отправку для ${meter.display_name}: ${newValue}`);
+          }
         } catch (error) {
           console.error(`Ошибка при отправке значения для ${meter.display_name}:`, error);
         }

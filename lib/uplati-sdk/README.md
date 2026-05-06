@@ -17,8 +17,8 @@
 </p>
 
 <p align="center">
-  <a href="https://www.npmjs.com/package/@advayta108/uplati-sdk/v/1.0.4"><img src="https://img.shields.io/static/v1?label=npm&message=1.0.4&color=CB3837&logo=npm&logoColor=white&style=flat-square" alt="npm 1.0.4" /></a>
-  <a href="https://uplati.ru"><img src="https://img.shields.io/badge/API_Version-3.25.10-orange.svg" alt="API Version" /></a>
+  <a href="https://www.npmjs.com/package/@advayta108/uplati-sdk/v/1.1.0"><img src="https://img.shields.io/static/v1?label=npm&message=1.1.0&color=CB3837&logo=npm&logoColor=white&style=flat-square" alt="npm 1.1.0" /></a>
+  <a href="https://uplati.ru"><img src="https://img.shields.io/badge/API_Version-3.33.23-orange.svg" alt="API Version" /></a>
   <a href="https://github.com/advayta108/uplati-bot/actions/workflows/build.yml"><img src="https://github.com/advayta108/uplati-bot/actions/workflows/build.yml/badge.svg" alt="Build" /></a>
   <a href="https://github.com/advayta108/uplati-bot/actions/workflows/lint.yml"><img src="https://github.com/advayta108/uplati-bot/actions/workflows/lint.yml/badge.svg" alt="Lint" /></a>
   <a href="https://github.com/advayta108/uplati-bot/actions/workflows/publish-sdk.yml"><img src="https://github.com/advayta108/uplati-bot/actions/workflows/publish-sdk.yml/badge.svg" alt="Publish SDK" /></a>

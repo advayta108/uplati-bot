@@ -3,7 +3,14 @@ import path from 'path';
 import { logMessage } from './logging';  // Импорт логирования
 import fs from 'fs';
 
-const dbPath = path.join(process.cwd(), 'data', 'users.db');
+/** Путь к SQLite; для тестов задайте абсолютный или относительный `USERS_DB_PATH` до импорта модуля */
+function getUsersDbPath(): string {
+  const raw = process.env.USERS_DB_PATH?.trim();
+  if (raw) {
+    return path.isAbsolute(raw) ? raw : path.join(process.cwd(), raw);
+  }
+  return path.join(process.cwd(), 'data', 'users.db');
+}
 
 const ensureDirectoryExists = (filePath: string) => {
   const dir = path.dirname(filePath);
@@ -30,7 +37,9 @@ export interface MeterRow {
   lastValue: number;
   lastUpdated: string;
   nextSendDate: string | null;
-  increment: number;
+  increment: number | null;
+  /** День месяца 1–25; null — автоотправка для этого счётчика не настроена */
+  auto_send_day: number | null;
 }
 
 type DbRow = UserRow | MeterRow | Record<string, unknown>;
@@ -44,6 +53,15 @@ type AsyncDb = {
 let sqliteDb: Database.Database | null = null;
 let asyncDb: AsyncDb | null = null;
 
+function migrateMetersColumns(db: Database.Database) {
+  const cols = db.prepare('PRAGMA table_info(meters)').all() as { name: string }[];
+  const names = new Set(cols.map((c) => c.name));
+  if (!names.has('auto_send_day')) {
+    db.exec('ALTER TABLE meters ADD COLUMN auto_send_day INTEGER');
+    logMessage('Миграция БД: добавлен столбец meters.auto_send_day');
+  }
+}
+
 const createAsyncDbAdapter = (db: Database.Database): AsyncDb => ({
   run: async (sql: string, params: QueryParams = []) => {
     db.prepare(sql).run(...params);
@@ -56,12 +74,26 @@ const createAsyncDbAdapter = (db: Database.Database): AsyncDb => ({
   },
 });
 
+/** Закрыть соединение и сбросить кэш (только для тестов / смены пути БД) */
+export const __resetDbSingletonForTests = (): void => {
+  if (sqliteDb) {
+    try {
+      sqliteDb.close();
+    } catch {
+      /* ignore */
+    }
+  }
+  sqliteDb = null;
+  asyncDb = null;
+};
+
 // Инициализация базы данных
 export const initializeDb = async (): Promise<AsyncDb> => {
   if (asyncDb) {
     return asyncDb;
   }
 
+  const dbPath = getUsersDbPath();
   ensureDirectoryExists(dbPath);  // Проверка папки
   sqliteDb = new Database(dbPath);
   sqliteDb.pragma('journal_mode = WAL');
@@ -82,8 +114,11 @@ export const initializeDb = async (): Promise<AsyncDb> => {
     lastUpdated TEXT,
     nextSendDate TEXT,
     increment REAL,
+    auto_send_day INTEGER,
     FOREIGN KEY (userId) REFERENCES users(chatId)
   )`);
+
+  migrateMetersColumns(sqliteDb);
 
   asyncDb = createAsyncDbAdapter(sqliteDb);
   logMessage('База данных инициализирована');
@@ -100,7 +135,10 @@ export const addUser = async (chatId: number, email: string, password: string, t
 // Функция для добавления счётчика пользователя
 export const addMeter = async (userId: number, meterId: number, meterName: string, lastValue: number, lastUpdated: string) => {
   const db = await initializeDb();
-  await db.run('INSERT INTO meters (userId, meterId, meterName, lastValue, lastUpdated) VALUES (?, ?, ?, ?, ?)', [userId, meterId, meterName, lastValue, lastUpdated]);
+  await db.run(
+    'INSERT INTO meters (userId, meterId, meterName, lastValue, lastUpdated, nextSendDate, increment, auto_send_day) VALUES (?, ?, ?, ?, ?, NULL, NULL, NULL)',
+    [userId, meterId, meterName, lastValue, lastUpdated]
+  );
   logMessage(`Счётчик ${meterName} добавлен для пользователя ${userId}`);
 };
 
@@ -141,4 +179,41 @@ export const getAllUsers = async () => {
 export const getUser = async (chatId: number) => {
   const db = await initializeDb();
   return await db.get<UserRow>('SELECT * FROM users WHERE chatId = ?', [chatId]);
+};
+
+/** Удалить счётчики пользователя, которых нет в списке meterId из API */
+export const deleteMetersExceptIds = async (userId: number, meterIds: number[]) => {
+  const db = await initializeDb();
+  if (meterIds.length === 0) {
+    await db.run('DELETE FROM meters WHERE userId = ?', [userId]);
+    logMessage(`Удалены все счётчики пользователя ${userId} (пустой ответ API)`);
+    return;
+  }
+  const placeholders = meterIds.map(() => '?').join(',');
+  await db.run(`DELETE FROM meters WHERE userId = ? AND meterId NOT IN (${placeholders})`, [userId, ...meterIds]);
+  logMessage(`Синхронизация: удалены устаревшие счётчики пользователя ${userId}`);
+};
+
+/** Настройка автоотправки по счётчику */
+export const setMeterAutoConfig = async (
+  userId: number,
+  meterId: number,
+  increment: number,
+  autoSendDay: number,
+  nextSendDateIso: string
+) => {
+  const db = await initializeDb();
+  await db.run(
+    'UPDATE meters SET increment = ?, auto_send_day = ?, nextSendDate = ? WHERE userId = ? AND meterId = ?',
+    [increment, autoSendDay, nextSendDateIso, userId, meterId]
+  );
+  logMessage(`Автоотправка: user=${userId} meter=${meterId} increment=${increment} day=${autoSendDay}`);
+};
+
+export const getMetersWithAutoForUser = async (userId: number) => {
+  const db = await initializeDb();
+  return await db.all<MeterRow>(
+    `SELECT * FROM meters WHERE userId = ? AND auto_send_day IS NOT NULL AND increment IS NOT NULL AND increment > 0`,
+    [userId]
+  );
 };

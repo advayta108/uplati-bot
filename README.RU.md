@@ -20,7 +20,7 @@
 </p>
 
 <p align="center">
-  <a href="https://uplati.ru"><img src="https://img.shields.io/badge/API_Version-3.25.10-orange.svg" alt="API Version" /></a>
+  <a href="https://uplati.ru"><img src="https://img.shields.io/badge/API_Version-3.33.23-orange.svg" alt="API Version" /></a>
   <a href="https://github.com/advayta108/uplati-bot/actions/workflows/deploy.yml"><img src="https://github.com/advayta108/uplati-bot/actions/workflows/deploy.yml/badge.svg" alt="Deploybot" /></a>
   <a href="https://github.com/advayta108/uplati-bot/actions/workflows/build.yml"><img src="https://github.com/advayta108/uplati-bot/actions/workflows/build.yml/badge.svg" alt="Build" /></a>
   <a href="https://github.com/advayta108/uplati-bot/actions/workflows/lint.yml"><img src="https://github.com/advayta108/uplati-bot/actions/workflows/lint.yml/badge.svg" alt="Lint" /></a>

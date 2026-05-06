@@ -26,8 +26,12 @@ export const getMetersData = async (token: string): Promise<Sensor[]> => {
   return await client.getMeters();
 };
 
-// Функция для отправки значений счётчиков (обратная совместимость)
-export const sendSensorValue = async (token: string, sensorId: number, sensorValue: number | string): Promise<void> => {
+// Функция для отправки значений счётчиков (обратная совместимость; результат как в SDK)
+export const sendSensorValue = async (
+  token: string,
+  sensorId: number,
+  sensorValue: number | string
+): Promise<boolean> => {
   client.setToken(token);
-  await client.sendMeterValue(sensorId, sensorValue);
+  return client.sendMeterValue(sensorId, sensorValue);
 };

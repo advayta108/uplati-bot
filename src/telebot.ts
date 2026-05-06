@@ -1,7 +1,19 @@
-import { Telegraf} from 'telegraf';
+import { Telegraf, type Context } from 'telegraf';
 import dotenv from 'dotenv';
-import { addUser, initializeDb, upsertMeter, getAllUsers, updateUserToken, type MeterRow, type UserRow } from './database';  // Импортируем базу данных
-import { Receipt, Transaction, UplatiClient } from '@advayta108/uplati-sdk';
+import {
+  addUser,
+  initializeDb,
+  upsertMeter,
+  getAllUsers,
+  updateUserToken,
+  deleteMetersExceptIds,
+  setMeterAutoConfig,
+  getMetersWithAutoForUser,
+  type MeterRow,
+  type UserRow,
+} from './database';
+import { Receipt, Transaction, UplatiClient, type Sensor } from '@advayta108/uplati-sdk';
+import { computeInitialNextSend } from './meterSchedule';
 import { logMessage } from './logging';
 
 dotenv.config();
@@ -31,6 +43,106 @@ const isTokenValid = async (token: string): Promise<boolean> => {
     return false;
   }
 };
+
+/** Синхронизировать счётчики пользователя с API и вернуть актуальный список */
+async function syncMetersFromApiForChat(
+  chatId: number
+): Promise<{ ok: true; sensors: Sensor[] } | { ok: false; message: string }> {
+  const db = await initializeDb();
+  const user = await db.get<UserRow>('SELECT * FROM users WHERE chatId = ?', [chatId]);
+  if (!user) {
+    return { ok: false, message: 'Вы не зарегистрированы. Используйте /adduser.' };
+  }
+
+  const tryFetch = async (): Promise<Sensor[]> => {
+    let token = user.token;
+    if (!token || token === 'null' || token === '') {
+      token = await uplatiClient.authenticate(user.email, user.password);
+      await updateUserToken(chatId, token);
+    } else {
+      uplatiClient.setToken(token);
+    }
+    return uplatiClient.getMeters();
+  };
+
+  try {
+    const sensors = await tryFetch();
+    for (const sensor of sensors) {
+      await upsertMeter(
+        chatId,
+        sensor.id,
+        sensor.display_name,
+        sensor.last_sensor_value,
+        sensor.last_sensor_date
+      );
+    }
+    await deleteMetersExceptIds(
+      chatId,
+      sensors.map((s) => s.id)
+    );
+    return { ok: true, sensors };
+  } catch (error) {
+    logMessage(`Синхронизация API для ${chatId}: ${error}`);
+    try {
+      const token = await uplatiClient.authenticate(user.email, user.password);
+      await updateUserToken(chatId, token);
+      uplatiClient.setToken(token);
+      const sensors = await uplatiClient.getMeters();
+      for (const sensor of sensors) {
+        await upsertMeter(
+          chatId,
+          sensor.id,
+          sensor.display_name,
+          sensor.last_sensor_value,
+          sensor.last_sensor_date
+        );
+      }
+      await deleteMetersExceptIds(
+        chatId,
+        sensors.map((s) => s.id)
+      );
+      return { ok: true, sensors };
+    } catch (retryError) {
+      logMessage(`Повторная синхронизация для ${chatId} не удалась: ${retryError}`);
+      return {
+        ok: false,
+        message: 'Не удалось получить данные из API. Проверьте логин и пароль или попробуйте позже.',
+      };
+    }
+  }
+}
+
+type SetAutoMetersWizard = {
+  step: 'select_indices' | 'increment' | 'day';
+  sensors: Sensor[];
+  selectedSensors: Sensor[];
+  incrementIndex: number;
+  incrementsByMeterId: Record<number, number>;
+};
+
+const setAutoWizard: Record<number, SetAutoMetersWizard> = {};
+
+function parsePositiveNumber(text: string): number | null {
+  const normalized = text.replace(',', '.').trim();
+  const n = Number(normalized);
+  if (!Number.isFinite(n) || n <= 0) return null;
+  return n;
+}
+
+function parseMeterIndices(text: string, maxIndex: number): number[] | null {
+  const parts = text
+    .split(/[\s,;]+/)
+    .map((p) => p.trim())
+    .filter(Boolean);
+  const indices = new Set<number>();
+  for (const p of parts) {
+    const n = parseInt(p, 10);
+    if (!Number.isInteger(n) || n < 1 || n > maxIndex) return null;
+    indices.add(n - 1);
+  }
+  if (indices.size === 0) return null;
+  return [...indices].sort((a, b) => a - b);
+}
 
 // Функция для обновления данных всех пользователей из API
 const updateAllUsersData = async () => {
@@ -95,6 +207,10 @@ const updateAllUsersData = async () => {
             sensor.last_sensor_date
           );
         }
+        await deleteMetersExceptIds(
+          user.chatId,
+          sensors.map((s) => s.id)
+        );
 
         logMessage(`✅ Данные для пользователя ${user.chatId} успешно обновлены (${sensors.length} счётчиков)`);
       } catch (error) {
@@ -115,6 +231,10 @@ const updateAllUsersData = async () => {
               sensor.last_sensor_date
             );
           }
+          await deleteMetersExceptIds(
+            user.chatId,
+            sensors.map((s) => s.id)
+          );
           logMessage(`✅ Данные для пользователя ${user.chatId} обновлены после обновления токена (${sensors.length} счётчиков)`);
         } catch (retryError) {
           logMessage(`❌ Не удалось обновить данные для пользователя ${user.chatId} после повторной попытки: ${retryError}`);
@@ -158,7 +278,8 @@ bot.command('start', (ctx) => {
     'Что я умею:',
     '🔐 Авторизовать и сохранить данные пользователя',
     '📥 Обновлять данные по счётчикам из API',
-    '📊 Показывать текущий статус счётчиков',
+    '📊 Показывать статус счётчиков (сверка с API и обновление БД)',
+    '⚙️ Настраивать автоотправку показаний по дню месяца',
     '🧾 Показывать список квитанций',
     '💳 Показывать последние транзакции',
     '',
@@ -169,12 +290,90 @@ bot.command('start', (ctx) => {
     '/update',
     '/receipts',
     '/transactions',
+    '/set_auto_meters',
+    '/auto_meters_status',
   ].join('\n');
 
   ctx.reply(message);
 });
 
-// Команда для получения текущего статуса счётчиков
+async function handleSetAutoWizardText(ctx: Context, chatId: number) {
+  const wizard = setAutoWizard[chatId];
+  if (!wizard) return;
+  const text = ctx.message && 'text' in ctx.message ? ctx.message.text.trim() : '';
+  if (!text) return;
+  const lower = text.toLowerCase();
+  if (lower === 'отмена' || lower === 'cancel') {
+    delete setAutoWizard[chatId];
+    await ctx.reply('Настройка автоотправки отменена.');
+    return;
+  }
+
+  if (wizard.step === 'select_indices') {
+    const idx = parseMeterIndices(text, wizard.sensors.length);
+    if (!idx) {
+      await ctx.reply(`Укажите номера от 1 до ${wizard.sensors.length}, например: 1, 2`);
+      return;
+    }
+    wizard.selectedSensors = idx.map((i) => wizard.sensors[i]!);
+    wizard.step = 'increment';
+    wizard.incrementIndex = 0;
+    const s = wizard.selectedSensors[0]!;
+    await ctx.reply(
+      `Счётчиков выбрано: ${wizard.selectedSensors.length}.\nВведите приращение показаний для «${s.display_name}» (сейчас ${s.last_sensor_value}). Число должно быть > 0 (целое или дробное). Это значение будет добавляться при каждой автоотправке на сервер.`
+    );
+    return;
+  }
+
+  if (wizard.step === 'increment') {
+    const inc = parsePositiveNumber(text);
+    if (inc === null) {
+      await ctx.reply('Введите положительное число, например 3 или 0.5');
+      return;
+    }
+    const current = wizard.selectedSensors[wizard.incrementIndex]!;
+    wizard.incrementsByMeterId[current.id] = inc;
+    wizard.incrementIndex += 1;
+    if (wizard.incrementIndex < wizard.selectedSensors.length) {
+      const nextS = wizard.selectedSensors[wizard.incrementIndex]!;
+      await ctx.reply(
+        `Приращение сохранено.\nВведите приращение для «${nextS.display_name}» (сейчас ${nextS.last_sensor_value}):`
+      );
+      return;
+    }
+    wizard.step = 'day';
+    await ctx.reply(
+      'В какой день месяца (от 1 до 25) отправлять показания для выбранных счётчиков? Введите одно число.'
+    );
+    return;
+  }
+
+  if (wizard.step === 'day') {
+    const d = parseInt(text, 10);
+    if (!Number.isInteger(d) || d < 1 || d > 25) {
+      await ctx.reply('Введите целое число от 1 до 25.');
+      return;
+    }
+    const nextAt = computeInitialNextSend(d);
+    const nextIso = nextAt.toISOString();
+    const count = wizard.selectedSensors.length;
+    for (const s of wizard.selectedSensors) {
+      const inc = wizard.incrementsByMeterId[s.id];
+      if (inc === undefined) {
+        await ctx.reply('Внутренняя ошибка мастера. Начните снова с /set_auto_meters.');
+        delete setAutoWizard[chatId];
+        return;
+      }
+      await setMeterAutoConfig(chatId, s.id, inc, d, nextIso);
+    }
+    delete setAutoWizard[chatId];
+    await ctx.reply(
+      `Готово. Для ${count} счётчик(ов) автоотправка запланирована на ${d}-е число каждого месяца (около 10:00 по времени сервера). Следующая отправка не раньше: ${nextAt.toLocaleString('ru-RU')}.`
+    );
+  }
+}
+
+// Команда для получения текущего статуса счётчиков (сверка с API и обновление БД)
 bot.command('status', async (ctx) => {
   const chatId = ctx.message?.chat.id;
   if (!chatId) return;
@@ -182,30 +381,34 @@ bot.command('status', async (ctx) => {
   logMessage(`Команда /status вызвана пользователем ${chatId}`);
 
   try {
+    await ctx.reply('Сверяю данные с API и обновляю локальную базу...');
+    const sync = await syncMetersFromApiForChat(chatId);
+    if (!sync.ok) {
+      await ctx.reply(sync.message);
+      return;
+    }
+
     const db = await initializeDb();
-    
-    const user = await db.get<UserRow>('SELECT * FROM users WHERE chatId = ?', [chatId]);
-    if (!user) {
-      ctx.reply('Вы не зарегистрированы. Пожалуйста, используйте команду /adduser для регистрации.');
-      return;
-    }
-
-    const meters = await db.all<MeterRow>('SELECT * FROM meters WHERE userId = ?', [user.chatId]);
+    const meters = await db.all<MeterRow>(
+      'SELECT * FROM meters WHERE userId = ? ORDER BY meterId',
+      [chatId]
+    );
     if (meters.length === 0) {
-      ctx.reply('У вас нет зарегистрированных счётчиков.');
+      await ctx.reply('Счётчиков не найдено после синхронизации.');
       return;
     }
 
-    let message = 'Ваши счётчики:\n';
+    let message = 'Актуальные данные счётчиков:\n';
     meters.forEach((meter: MeterRow, index: number) => {
-      message += `${index + 1}. ${meter.meterName}: ${meter.lastValue} (последнее обновление: ${meter.lastUpdated})\n`;
+      message += `${index + 1}. ${meter.meterName}: ${meter.lastValue} (обновлено: ${meter.lastUpdated})\n`;
     });
+    message += `\nВсего: ${meters.length}. Данные синхронизированы с API.`;
 
-    ctx.reply(message);
-    logMessage(`Отправлен список счётчиков пользователю ${chatId}`);
+    await ctx.reply(message);
+    logMessage(`Отправлен /status пользователю ${chatId}`);
   } catch (error) {
     logMessage(`Ошибка при выполнении команды /status для пользователя ${chatId}: ${error}`);
-    ctx.reply('Произошла ошибка при получении данных. Попробуйте снова позже.');
+    await ctx.reply('Произошла ошибка при получении данных. Попробуйте снова позже.');
   }
 });
 
@@ -217,45 +420,85 @@ bot.command('update', async (ctx) => {
   logMessage(`Команда /update вызвана пользователем ${chatId}`);
 
   try {
-    const db = await initializeDb();
-    const user = await db.get<UserRow>('SELECT * FROM users WHERE chatId = ?', [chatId]);
-    
-    if (!user) {
-      ctx.reply('Вы не зарегистрированы. Пожалуйста, используйте команду /adduser для регистрации.');
+    await ctx.reply('Обновляю данные из API...');
+    const sync = await syncMetersFromApiForChat(chatId);
+    if (!sync.ok) {
+      await ctx.reply(sync.message);
       return;
     }
-
-    ctx.reply('Обновляю данные из API...');
-
-    // Обновляем токен если нужно
-    let token = user.token;
-    if (!token || token === 'null') {
-      token = await uplatiClient.authenticate(user.email, user.password);
-      await updateUserToken(chatId, token);
-    } else {
-      uplatiClient.setToken(token);
-    }
-
-    // Получаем актуальные данные по счётчикам
-    const sensors = await uplatiClient.getMeters();
-    logMessage(`Получено ${sensors.length} счётчиков для пользователя ${chatId}`);
-
-    // Обновляем данные в БД
-    for (const sensor of sensors) {
-      await upsertMeter(
-        chatId,
-        sensor.id,
-        sensor.display_name,
-        sensor.last_sensor_value,
-        sensor.last_sensor_date
-      );
-    }
-
-    ctx.reply(`Данные успешно обновлены! Найдено счётчиков: ${sensors.length}`);
+    await ctx.reply(`Данные успешно обновлены. Счётчиков в базе: ${sync.sensors.length}.`);
     logMessage(`Данные для пользователя ${chatId} успешно обновлены`);
   } catch (error) {
     logMessage(`Ошибка при обновлении данных для пользователя ${chatId}: ${error}`);
-    ctx.reply('Произошла ошибка при обновлении данных. Попробуйте снова позже.');
+    await ctx.reply('Произошла ошибка при обновлении данных. Попробуйте снова позже.');
+  }
+});
+
+// Мастер настройки автоотправки показаний
+bot.command('set_auto_meters', async (ctx) => {
+  const chatId = ctx.message?.chat.id;
+  if (!chatId) return;
+  logMessage(`Команда /set_auto_meters от ${chatId}`);
+  try {
+    const sync = await syncMetersFromApiForChat(chatId);
+    if (!sync.ok) {
+      await ctx.reply(sync.message);
+      return;
+    }
+    if (sync.sensors.length === 0) {
+      await ctx.reply('Нет счётчиков для настройки.');
+      return;
+    }
+    const lines = sync.sensors.map(
+      (s, i) => `${i + 1}. ${s.display_name} (текущие показания: ${s.last_sensor_value})`
+    );
+    setAutoWizard[chatId] = {
+      step: 'select_indices',
+      sensors: sync.sensors,
+      selectedSensors: [],
+      incrementIndex: 0,
+      incrementsByMeterId: {},
+    };
+    await ctx.reply(
+      [
+        'Настройка автоотправки показаний.',
+        'Ответьте номерами через запятую или пробел, для каких счётчиков включить автоотправку (например: 1,3).',
+        'Чтобы выйти, напишите «отмена».',
+        '',
+        ...lines,
+      ].join('\n')
+    );
+  } catch (error) {
+    logMessage(`Ошибка /set_auto_meters для ${chatId}: ${error}`);
+    await ctx.reply('Не удалось начать настройку. Попробуйте позже.');
+  }
+});
+
+bot.command('auto_meters_status', async (ctx) => {
+  const chatId = ctx.message?.chat.id;
+  if (!chatId) return;
+  logMessage(`Команда /auto_meters_status от ${chatId}`);
+  try {
+    const db = await initializeDb();
+    const user = await db.get<UserRow>('SELECT * FROM users WHERE chatId = ?', [chatId]);
+    if (!user) {
+      await ctx.reply('Вы не зарегистрированы. Используйте /adduser.');
+      return;
+    }
+    const rows = await getMetersWithAutoForUser(chatId);
+    if (rows.length === 0) {
+      await ctx.reply('Автоотправка показаний не настроена ни для одного счётчика. Используйте /set_auto_meters.');
+      return;
+    }
+    let msg = 'Автоотправка настроена для счётчиков:\n';
+    rows.forEach((m, i) => {
+      const next = m.nextSendDate ? new Date(m.nextSendDate).toLocaleString('ru-RU') : '—';
+      msg += `${i + 1}. ${m.meterName}\n   приращение: ${m.increment}, день месяца: ${m.auto_send_day}, следующая отправка: ${next}\n`;
+    });
+    await ctx.reply(msg);
+  } catch (error) {
+    logMessage(`Ошибка /auto_meters_status для ${chatId}: ${error}`);
+    await ctx.reply('Не удалось прочитать настройки. Попробуйте позже.');
   }
 });
 
@@ -386,6 +629,11 @@ bot.on('text', async (ctx) => {
   logMessage(`Получено текстовое сообщение от пользователя ${chatId}`);
 
   if (!chatId) return;
+
+  if (setAutoWizard[chatId]) {
+    await handleSetAutoWizardText(ctx, chatId);
+    return;
+  }
 
   const userState = userData[chatId];
   if (!userState) {

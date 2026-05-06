@@ -9,7 +9,6 @@ import {
   Autopayment,
   AutopaymentSettings,
   AuthResponse,
-  SensorsResponse,
   ReceiptsResponse,
   TransactionsResponse,
   AutopaymentsResponse,
@@ -18,15 +17,89 @@ import {
 // Базовый URL API
 const BASE_URL = 'https://gw3-online.uplati.ru/api';
 const AUTH_URL = `${BASE_URL}/auth`;
+/** Список счётчиков в ЛК (вместо устаревшего /sensors) */
+const COUNTERS_PATH = '/user/counters';
 
 // Опции для клиента
 export interface UplatiClientOptions {
   sendDataEnabled?: boolean;
   baseUrl?: string;
+  /** База локального мока при `sendDataEnabled: false` (по умолчанию http://localhost:3000 или UPLATI_MOCK_BASE_URL) */
+  mockBaseUrl?: string;
   logger?: (message: string) => void;
 }
 
-// Функция для аутентификации
+function getMockBaseUrl(options?: UplatiClientOptions): string {
+  const fromOpts = options?.mockBaseUrl?.trim();
+  if (fromOpts) return fromOpts.replace(/\/$/, '');
+  const env = typeof process !== 'undefined' ? process.env.UPLATI_MOCK_BASE_URL?.trim() : '';
+  if (env) return env.replace(/\/$/, '');
+  return 'http://localhost:3000';
+}
+
+function asRecord(v: unknown): Record<string, unknown> | null {
+  if (v && typeof v === 'object' && !Array.isArray(v)) return v as Record<string, unknown>;
+  return null;
+}
+
+function counterItemToSensor(item: unknown): Sensor {
+  const r = asRecord(item);
+  if (!r) throw new Error('Counter item is not an object');
+  const id = Number(r.id ?? r.counter_id ?? r.meter_id ?? r.sensor_id);
+  if (!Number.isFinite(id)) throw new Error('Counter item has no numeric id');
+  const display_name = String(
+    r.display_name ?? r.name ?? r.title ?? r.service_name ?? `Счётчик ${id}`
+  );
+  const last_sensor_value = Number(
+    r.last_sensor_value ?? r.value ?? r.current_value ?? r.reading ?? 0
+  );
+  const last_sensor_date = String(
+    r.last_sensor_date ?? r.updated_at ?? r.last_transmission_date ?? r.date ?? ''
+  );
+  return { id, display_name, last_sensor_value, last_sensor_date };
+}
+
+function normalizeSensorRow(sensor: unknown): Sensor {
+  const s = asRecord(sensor);
+  if (!s) throw new Error('Sensor is not an object');
+  const id = Number(s.id);
+  if (!Number.isFinite(id)) throw new Error('Sensor has no numeric id');
+  return {
+    id,
+    display_name: String(s.display_name ?? `Счётчик ${id}`),
+    last_sensor_value: Number(s.last_sensor_value ?? 0),
+    last_sensor_date: String(s.last_sensor_date ?? ''),
+  };
+}
+
+/** Разбор ответа GET /user/counters или legacy `{ sensors: [...] }` */
+function parseMetersPayload(data: unknown): Sensor[] {
+  const root = asRecord(data);
+  if (!root) throw new Error('Meters response: invalid JSON');
+
+  const nested = asRecord(root.data);
+
+  if (Array.isArray(root.sensors)) {
+    return root.sensors.map((x) => normalizeSensorRow(x));
+  }
+  if (Array.isArray(root.counters)) {
+    return root.counters.map((x) => counterItemToSensor(x));
+  }
+  if (nested) {
+    if (Array.isArray(nested.sensors)) {
+      return nested.sensors.map((x) => normalizeSensorRow(x));
+    }
+    if (Array.isArray(nested.counters)) {
+      return nested.counters.map((x) => counterItemToSensor(x));
+    }
+  }
+
+  throw new Error(
+    'Meters response: expected sensors or counters (or data.sensors / data.counters)'
+  );
+}
+
+// Функция для аутентификации (multipart/form-data как в браузере)
 export const authenticate = async (
   email: string,
   password: string,
@@ -35,22 +108,19 @@ export const authenticate = async (
   const logger = options?.logger || console.log;
 
   try {
-    const response = await axios.post<AuthResponse>(
-      AUTH_URL,
-      {
-        email_or_phone: email,
-        password: password,
-        weboper_token: 'null',
-      },
-      {
-        headers: {
-          ...getHeaders(),
-          'content-type': 'multipart/form-data',
-        },
-      }
-    );
+    const formData = new FormData();
+    formData.append('email_or_phone', email);
+    formData.append('password', password);
+    formData.append('weboper_token', 'null');
 
-    if (response.data.session.token) {
+    const response = await axios.post<AuthResponse>(AUTH_URL, formData, {
+      headers: {
+        ...getHeaders(),
+        ...formData.getHeaders(),
+      },
+    });
+
+    if (response.data.session?.token) {
       return response.data.session.token;
     } else {
       throw new Error('Authentication failed');
@@ -73,30 +143,46 @@ export const getMetersData = async (
   const logger = options?.logger || console.log;
   const baseUrl = options?.baseUrl || BASE_URL;
   const sendDataEnabled = options?.sendDataEnabled !== false;
+  const mockBase = getMockBaseUrl(options);
   const metersUrl = sendDataEnabled
-    ? `${baseUrl}/sensors`
-    : 'http://localhost:3000/test';
+    ? `${baseUrl}${COUNTERS_PATH}`
+    : `${mockBase}/api/user/counters`;
 
   try {
-    const response = await axios.get<SensorsResponse>(metersUrl, {
+    const response = await axios.get(metersUrl, {
       headers: getHeaders(token),
     });
 
-    const sensors: Sensor[] = response.data.sensors.map((sensor) => ({
-      id: sensor.id,
-      last_sensor_value: sensor.last_sensor_value,
-      last_sensor_date: sensor.last_sensor_date,
-      display_name: sensor.display_name,
-    }));
-
-    return sensors;
+    return parseMetersPayload(response.data);
   } catch (error: unknown) {
+    if (
+      sendDataEnabled &&
+      error instanceof AxiosError &&
+      error.response?.status === 404
+    ) {
+      try {
+        const response = await axios.get(`${baseUrl}/sensors`, {
+          headers: getHeaders(token),
+        });
+        return parseMetersPayload(response.data);
+      } catch (fallbackErr: unknown) {
+        if (fallbackErr instanceof AxiosError) {
+          logger(
+            'Error fetching meters data (fallback /sensors): ' +
+              (fallbackErr.response?.data || fallbackErr.message)
+          );
+        } else {
+          logger('Unexpected error fetching meters data (fallback): ' + String(fallbackErr));
+        }
+        throw fallbackErr;
+      }
+    }
     if (error instanceof AxiosError) {
       logger('Error fetching meters data: ' + (error.response?.data || error.message));
     } else {
       logger('Unexpected error fetching meters data: ' + String(error));
     }
-    return [];
+    throw error;
   }
 };
 
@@ -109,6 +195,8 @@ export const sendSensorValue = async (
 ): Promise<boolean> => {
   const logger = options?.logger || console.log;
   const baseUrl = options?.baseUrl || BASE_URL;
+  const sendDataEnabled = options?.sendDataEnabled !== false;
+  const mockBase = getMockBaseUrl(options);
 
   try {
     const formData = new FormData();
@@ -119,11 +207,13 @@ export const sendSensorValue = async (
       ...formData.getHeaders(),
     };
 
-    const url = `${baseUrl}/sensor/${sensorId}/value`;
+    const url = sendDataEnabled
+      ? `${baseUrl}/sensor/${sensorId}/value`
+      : `${mockBase}/api/sensor/${sensorId}/value`;
 
     const response = await axios.post(url, formData, { headers: headersWithFormData });
 
-    if (response.data.status === 201) {
+    if (response.data?.status === 201) {
       logger('Данные успешно отправлены на сервер');
       return true;
     } else {
