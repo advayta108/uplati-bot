@@ -52,7 +52,7 @@
     "eslint": "^10.4.0",
     "eslint-plugin-codegen": "^0.34.1",
     "typescript": "^6.0.3",
-    "typescript-eslint": "^8.59.3",
+    "typescript-eslint": "^8.59.4",
     "vitest": "^4.1.7"
   },
   "overrides": {
