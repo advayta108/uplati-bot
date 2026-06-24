@@ -48,7 +48,7 @@
     "@types/prompt-sync": "^4.2.3",
     "@types/unist": "^3.0.3",
     "@typescript-eslint/eslint-plugin": "^8.61.1",
-    "@typescript-eslint/parser": "^8.61.1",
+    "@typescript-eslint/parser": "^8.62.0",
     "eslint": "^10.5.0",
     "eslint-plugin-codegen": "^0.34.1",
     "typescript": "^6.0.3",
