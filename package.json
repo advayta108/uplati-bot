@@ -49,7 +49,7 @@
     "@types/unist": "^3.0.3",
     "@typescript-eslint/eslint-plugin": "^8.67.0",
     "@typescript-eslint/parser": "^8.68.0",
-    "eslint": "^10.9.0",
+    "eslint": "^10.9.1",
     "eslint-plugin-codegen": "^0.34.1",
     "typescript": "^7.0.2",
     "typescript-eslint": "^8.68.0",
