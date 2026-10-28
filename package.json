@@ -39,7 +39,7 @@
     "@eslint/compat": "^2.1.0",
     "@eslint/js": "^10.0.1",
     "@types/better-sqlite3": "^9.6.0",
-    "@types/dedent": "^0.7.2",
+    "@types/dedent": "^1.7.2",
     "@types/express": "^5.0.6",
     "@types/js-yaml": "^4.0.9",
     "@types/jsdom": "^30.0.0",
